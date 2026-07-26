@@ -59,7 +59,7 @@ export default function Setup() {
               type="text"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder="53MaZ1Z3Y8RmzXK9Nyk9iB45"
+              placeholder="your-secret-token"
               className="w-full rounded-lg px-3 py-2.5 text-sm outline-none border focus:ring-2 font-mono"
               style={{ background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
             />

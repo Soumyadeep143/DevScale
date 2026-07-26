@@ -27,8 +27,9 @@
  * Setup screen. See ../SETUP.md for the full walkthrough.
  */
 
-// Change this to any random string of your own before deploying.
-const SECRET_TOKEN = '53MaZ1Z3Y8RmzXK9Nyk9iB45';
+// Change this to any random string of your own before deploying — this
+// value never needs to leave your own Apps Script project.
+const SECRET_TOKEN = 'CHANGE_ME_TO_A_RANDOM_STRING';
 
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 

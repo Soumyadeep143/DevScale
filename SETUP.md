@@ -16,10 +16,9 @@ script creates it automatically the first time it runs.
 1. In your Google Sheet, click **Extensions → Apps Script**.
 2. Delete anything in the editor (`Code.gs`) and paste the entire contents of
    [`apps-script/Code.gs`](apps-script/Code.gs) from this project.
-3. A secret token is already filled in for you:
-   `53MaZ1Z3Y8RmzXK9Nyk9iB45`
-   (Change `SECRET_TOKEN` to any random string of your own if you want — just
-   make sure it matches what you enter in the app later.)
+3. A `SECRET_TOKEN` constant is already filled in near the top of the file.
+   Change it to any random string of your own — just make sure it matches
+   what you enter in the app later (and never commit your real value).
 4. Click **Save** (Ctrl+S).
 
 ## 3. Deploy as a Web App
