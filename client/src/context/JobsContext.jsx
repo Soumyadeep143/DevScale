@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getConfig, setConfig, clearConfig } from '../lib/config';
 import * as api from '../lib/api';
 
@@ -11,15 +11,26 @@ export function JobsProvider({ children }) {
   const [error, setError] = useState(null);
   const [lastSynced, setLastSynced] = useState(null);
 
+  // A scheduled poll that lands mid-add/edit/delete would refetch a stale
+  // list and clobber the optimistic update while the real write is still in
+  // flight — this tracks how many mutations are currently in flight so
+  // refresh() can just skip that cycle (it'll pick up the settled state on
+  // the next poll instead). consecutiveFailures drives poll backoff below.
+  const inFlightMutations = useRef(0);
+  const consecutiveFailures = useRef(0);
+
   const refresh = useCallback(async () => {
     if (!getConfig()) return;
+    if (inFlightMutations.current > 0) return;
     setLoading(true);
     setError(null);
     try {
       const data = await api.fetchJobs();
       setJobs(data);
       setLastSynced(new Date());
+      consecutiveFailures.current = 0;
     } catch (err) {
+      consecutiveFailures.current += 1;
       setError(err.message || 'Failed to load jobs');
     } finally {
       setLoading(false);
@@ -33,36 +44,46 @@ export function JobsProvider({ children }) {
   }, [configured, refresh]);
 
   // Keeps the app in sync with edits made by hand directly in the Google
-  // Sheet: polls every 10s while the tab is actually visible (so a manual
-  // sheet edit shows up here almost immediately), pauses the interval
-  // entirely when the tab is backgrounded to save quota/battery, and
-  // refreshes right away the moment it becomes visible again.
+  // Sheet: polls while the tab is actually visible (so a manual sheet edit
+  // shows up here almost immediately), pauses entirely when the tab is
+  // backgrounded to save quota/battery, and refreshes right away the moment
+  // it becomes visible again. The interval itself backs off to 30s after 3
+  // consecutive failures (e.g. the tracker reporting itself busy under load)
+  // instead of hammering it every 10s, and recovers to 10s on the next
+  // success.
   useEffect(() => {
     if (!configured) return;
-    let interval = null;
+    let timer = null;
+    let cancelled = false;
 
-    function startPolling() {
-      if (interval) return;
-      interval = setInterval(refresh, 10000);
+    function scheduleNext() {
+      if (cancelled) return;
+      const delay = consecutiveFailures.current >= 3 ? 30000 : 10000;
+      timer = setTimeout(async () => {
+        await refresh();
+        scheduleNext();
+      }, delay);
     }
     function stopPolling() {
-      if (interval) clearInterval(interval);
-      interval = null;
+      if (timer) clearTimeout(timer);
+      timer = null;
     }
     function onVisibilityChange() {
       if (document.visibilityState === 'visible') {
+        stopPolling();
         refresh();
-        startPolling();
+        scheduleNext();
       } else {
         stopPolling();
       }
     }
 
-    if (document.visibilityState === 'visible') startPolling();
+    if (document.visibilityState === 'visible') scheduleNext();
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('focus', onVisibilityChange);
 
     return () => {
+      cancelled = true;
       stopPolling();
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('focus', onVisibilityChange);
@@ -85,6 +106,7 @@ export function JobsProvider({ children }) {
     const tempId = `temp-${crypto.randomUUID()}`;
     const optimistic = { ...job, id: tempId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     setJobs((prev) => [optimistic, ...prev]);
+    inFlightMutations.current += 1;
     try {
       const created = await api.createJob(job);
       setJobs((prev) => prev.map((j) => (j.id === tempId ? created : j)));
@@ -92,6 +114,8 @@ export function JobsProvider({ children }) {
     } catch (err) {
       setJobs((prev) => prev.filter((j) => j.id !== tempId));
       throw err;
+    } finally {
+      inFlightMutations.current -= 1;
     }
   }, []);
 
@@ -106,6 +130,7 @@ export function JobsProvider({ children }) {
         return j;
       })
     );
+    inFlightMutations.current += 1;
     try {
       const updated = await api.updateJob(id, patch);
       if (updated) setJobs((prev) => prev.map((j) => (j.id === id ? updated : j)));
@@ -113,6 +138,8 @@ export function JobsProvider({ children }) {
     } catch (err) {
       if (prevJob) setJobs((prev) => prev.map((j) => (j.id === id ? prevJob : j)));
       throw err;
+    } finally {
+      inFlightMutations.current -= 1;
     }
   }, []);
 
@@ -131,6 +158,7 @@ export function JobsProvider({ children }) {
       removed = prev[index];
       return prev.filter((j) => j.id !== id);
     });
+    inFlightMutations.current += 1;
     try {
       await api.updateJob(id, { status });
     } catch (err) {
@@ -143,6 +171,7 @@ export function JobsProvider({ children }) {
       }
       throw err;
     } finally {
+      inFlightMutations.current -= 1;
       setTimeout(refresh, 1500);
     }
   }, [refresh]);
@@ -155,6 +184,7 @@ export function JobsProvider({ children }) {
       removed = prev[index];
       return prev.filter((j) => j.id !== id);
     });
+    inFlightMutations.current += 1;
     try {
       await api.deleteJob(id);
     } catch (err) {
@@ -166,11 +196,22 @@ export function JobsProvider({ children }) {
         });
       }
       throw err;
+    } finally {
+      inFlightMutations.current -= 1;
     }
   }, []);
 
   const importJobs = useCallback(async (newJobs) => {
-    const count = await api.bulkImportJobs(newJobs);
+    inFlightMutations.current += 1;
+    let count;
+    try {
+      count = await api.bulkImportJobs(newJobs);
+    } finally {
+      // Decrement before the explicit refresh below — refresh() itself
+      // skips its fetch while any mutation is still in flight, and this
+      // one is the whole point of finishing an import.
+      inFlightMutations.current -= 1;
+    }
     await refresh();
     return count;
   }, [refresh]);

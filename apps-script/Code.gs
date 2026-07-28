@@ -68,6 +68,26 @@ function jsonOut_(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// Every sheet read-then-write (find a row, then write back to it; append a
+// row, then stamp its dropdown) has to be atomic across concurrent requests
+// — two tabs open, the 10s poll firing mid-edit, or the AI assistant reading
+// while you add a job. Without this, concurrent executions can interleave
+// and corrupt or misplace rows. Callers acquire this once per top-level
+// action and never nest it, so it's always released promptly (including
+// before any slow network call like Groq, which must never run while
+// holding the lock).
+function withLock_(fn) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('The tracker is busy right now — please try again in a few seconds.');
+  }
+  try {
+    return fn();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function isEmailStr_(s) {
   return /@/.test(String(s || '')) && !/\s/.test(String(s || ''));
 }
@@ -297,6 +317,175 @@ function getGroqKey_() {
   return PropertiesService.getScriptProperties().getProperty('GROQ_API_KEY');
 }
 
+// --- Supabase mirror -------------------------------------------------------
+// Google Sheets stays the single source of truth for both jobs and leads —
+// this project never authors data in Supabase directly. Every write made
+// through the website (or a manual edit typed into the sheet, once the
+// onTrackerEdit trigger below is installed) pushes a copy into Supabase, so
+// Supabase always mirrors the sheet rather than the other way around. That
+// one-directional flow is what keeps this safe from sync loops: nothing
+// ever reads a change *from* Supabase and writes it back to the sheet.
+// Entirely optional — every function here silently no-ops if
+// SUPABASE_URL / SUPABASE_SERVICE_KEY aren't set as Script Properties.
+
+function getSupabaseConfig_() {
+  const props = PropertiesService.getScriptProperties();
+  const url = props.getProperty('SUPABASE_URL');
+  const key = props.getProperty('SUPABASE_SERVICE_KEY');
+  if (!url || !key) return null;
+  return { url: url.replace(/\/+$/, ''), key: key };
+}
+
+// `preferOverride` lets callers ask for upsert semantics
+// ("resolution=merge-duplicates") instead of the default plain insert/error
+// behavior — PostgREST's Prefer header controls this per-request.
+function supabaseRequest_(method, path, body, preferOverride) {
+  const cfg = getSupabaseConfig_();
+  if (!cfg) throw new Error('Not set up yet. In Apps Script, add SUPABASE_URL and SUPABASE_SERVICE_KEY as Script Properties. See SETUP.md.');
+
+  const options = {
+    method: method,
+    muteHttpExceptions: true,
+    headers: {
+      apikey: cfg.key,
+      Authorization: 'Bearer ' + cfg.key,
+      'Content-Type': 'application/json',
+      Prefer: preferOverride || 'return=representation',
+    },
+  };
+  if (body !== undefined) options.payload = JSON.stringify(body);
+
+  const res = UrlFetchApp.fetch(cfg.url + '/rest/v1' + path, options);
+  const status = res.getResponseCode();
+  const text = res.getContentText();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch (err) {
+    data = text;
+  }
+  if (status >= 400) {
+    const msg = (data && data.message) || ('Supabase request failed (' + status + ')');
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function listNotes_() {
+  if (!getSupabaseConfig_()) return [];
+  return supabaseRequest_('get', '/notes?select=*&order=updated_at.desc') || [];
+}
+
+function createNote_(content) {
+  const now = new Date().toISOString();
+  const rows = supabaseRequest_('post', '/notes', [{ content: content || '', created_at: now, updated_at: now }]);
+  return rows && rows[0];
+}
+
+function updateNote_(id, content) {
+  const rows = supabaseRequest_('patch', '/notes?id=eq.' + encodeURIComponent(String(id)), {
+    content: content || '',
+    updated_at: new Date().toISOString(),
+  });
+  return rows && rows[0];
+}
+
+function deleteNote_(id) {
+  supabaseRequest_('delete', '/notes?id=eq.' + encodeURIComponent(String(id)));
+}
+
+// Shape mirrored into Supabase's `jobs` table — deliberately flat text
+// columns (rather than typed date/timestamp columns) because the sheet
+// itself sometimes holds hand-typed or irregular values; the mirror should
+// never fail to sync just because a column's type is stricter than the
+// sheet's own data.
+function jobToSupabaseRow_(job) {
+  return {
+    id: String(job.id),
+    company: job.company || '',
+    role: job.role || '',
+    status: job.status || '',
+    date_applied: job.dateApplied || '',
+    interview_status: job.interviewStatus || '',
+    contact: job.contact || '',
+    source: job.source || '',
+    location: job.location || '',
+    experience: job.experience || '',
+    posted_time: job.postedTime || '',
+    notes: job.notes || '',
+    created_at: job.createdAt || '',
+    updated_at: job.updatedAt || '',
+    synced_at: new Date().toISOString(),
+  };
+}
+
+// Used after a single create/update — one small upsert instead of
+// resyncing everything. Best-effort: a Supabase hiccup here must never
+// break the sheet write the user is actually waiting on.
+function upsertJobToSupabase_(job) {
+  if (!getSupabaseConfig_() || !job || !job.id) return;
+  try {
+    supabaseRequest_('post', '/jobs', [jobToSupabaseRow_(job)], 'resolution=merge-duplicates,return=minimal');
+  } catch (err) {
+    console.error('Supabase job upsert failed: ' + err);
+  }
+}
+
+function deleteJobFromSupabase_(id) {
+  if (!getSupabaseConfig_() || !id) return;
+  try {
+    supabaseRequest_('delete', '/jobs?id=eq.' + encodeURIComponent(String(id)));
+  } catch (err) {
+    console.error('Supabase job delete failed: ' + err);
+  }
+}
+
+// Used after bulk imports, lead promotions, and manual sheet edits — cases
+// where reconciling the whole table is simpler and safer than tracking
+// exactly what changed by hand. Cheap at personal-tracker scale (dozens to
+// low hundreds of rows).
+function resyncAllJobsToSupabase_(jobs) {
+  if (!getSupabaseConfig_()) return;
+  try {
+    const rows = jobs.map(jobToSupabaseRow_);
+    for (var i = 0; i < rows.length; i += 200) {
+      supabaseRequest_('post', '/jobs', rows.slice(i, i + 200), 'resolution=merge-duplicates,return=minimal');
+    }
+    const idList = jobs.map(function (j) { return String(j.id); }).join(',');
+    const filter = idList ? ('/jobs?id=not.in.(' + idList + ')') : '/jobs?id=neq.__never__';
+    supabaseRequest_('delete', filter);
+  } catch (err) {
+    console.error('Supabase full resync failed: ' + err);
+  }
+}
+
+// Install this once as an installable trigger — in the Apps Script editor:
+// Triggers (clock icon) → Add Trigger → function "onTrackerEdit" → event
+// source "From spreadsheet" → event type "On edit" → Save. That's what
+// makes a value typed straight into the sheet reach Supabase within
+// moments. Skipping it isn't a problem: the sheet stays fully correct and
+// the app still shows manual edits via its normal 10s poll — Supabase's
+// copy will just catch up on the next add/edit/delete/import made through
+// the website instead of immediately.
+//
+// Simple (automatic) `onEdit(e)` triggers are sandboxed and can't call
+// UrlFetchApp, which is why this has to be installed as an installable
+// trigger rather than just working automatically like readTracker_'s
+// backfill does.
+function onTrackerEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    const sheet = e.range.getSheet();
+    if (sheet.getName() !== TRACKER_TAB_NAME) return;
+    if (e.range.getRow() < 2) return; // header row — nothing to sync
+
+    const jobs = withLock_(function () { return readAll_(); });
+    resyncAllJobsToSupabase_(jobs);
+  } catch (err) {
+    console.error('onTrackerEdit sync failed: ' + err);
+  }
+}
+
 function getLeetcodeSheet_() {
   return SpreadsheetApp.openById(LEETCODE_SHEET_ID).getSheetByName(LEETCODE_TAB_NAME);
 }
@@ -353,6 +542,9 @@ function buildJobsContext_(jobs) {
   VALID_STATUSES.forEach(function (s) { counts[s] = 0; });
   jobs.forEach(function (j) { counts[j.status] = (counts[j.status] || 0) + 1; });
 
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const appliedToday = jobs.filter(function (j) { return j.dateApplied === today; }).length;
+
   const lines = jobs.slice(0, 400).map(function (j) {
     const parts = [j.company, j.role, 'stage: ' + j.status];
     if (j.dateApplied) parts.push('applied ' + j.dateApplied);
@@ -361,22 +553,35 @@ function buildJobsContext_(jobs) {
     return '- ' + parts.filter(Boolean).join(' | ');
   });
 
-  return 'Counts by stage: ' + JSON.stringify(counts) + '\n\nJobs (most recent first):\n' + lines.join('\n');
+  return 'Today\'s date: ' + today + '\nApplied today: ' + appliedToday +
+    '\nCounts by stage: ' + JSON.stringify(counts) + '\n\nJobs (most recent first):\n' + lines.join('\n');
+}
+
+function buildNotesContext_(notes) {
+  if (!notes || !notes.length) return '';
+  const lines = notes.slice(0, 100).map(function (n) {
+    const stamp = (n.updated_at || n.created_at || '').slice(0, 10);
+    return '- [' + stamp + '] ' + String(n.content || '').replace(/\s+/g, ' ').slice(0, 500);
+  });
+  return '\n\nGeneral strategy notes, not tied to a specific job (most recent first):\n' + lines.join('\n');
 }
 
 // `history` is the prior turns of this chat session, sent by the client as
 // [{role: 'user'|'ai', text: string}, ...] — this is what makes it a real
 // multi-turn assistant instead of a one-shot Q&A.
-function askGroq_(question, history, jobs) {
+function askGroq_(question, history, jobs, notes) {
   const apiKey = getGroqKey_();
   if (!apiKey) {
     return { ok: false, error: 'No Groq API key set. In Apps Script, go to Project Settings → Script Properties, add GROQ_API_KEY. See SETUP.md.' };
   }
 
-  const context = buildJobsContext_(jobs);
+  const context = buildJobsContext_(jobs) + buildNotesContext_(notes);
   const systemPrompt = 'You are a sharp, concise job-search assistant embedded in the user\'s job tracker app. ' +
-    'You can see their full pipeline below — every job\'s stage and their own notes/comments. ' +
+    'You can see their full pipeline below — every job\'s stage and their own notes/comments — plus their ' +
+    'general job-search strategy notes. ' +
     'Answer naturally and specifically using this data (mention companies/roles by name when relevant). ' +
+    'When asked where they\'re failing or what to improve, look for patterns across rejected/stalled jobs ' +
+    '(stage they keep dying at, missing follow-ups, recurring feedback in comments) rather than a generic answer. ' +
     'Keep answers tight: short paragraphs or bullet points, no markdown headers. ' +
     'If asked something the data can\'t answer, say so plainly rather than guessing.\n\n' + context;
 
@@ -408,22 +613,89 @@ function askGroq_(question, history, jobs) {
   return { ok: true, answer: answer || 'No response from Groq.' };
 }
 
+// One-off, focused analysis of a single job — distinct from askGroq_'s open
+// chat: this always asks the same two things (likely reason, concrete next
+// step) about whatever's pasted into that job's notes (e.g. a rejection
+// email), and is never written back automatically — the client only saves
+// the result to notes once the user explicitly confirms.
+function analyzeRejection_(job) {
+  const apiKey = getGroqKey_();
+  if (!apiKey) {
+    return { ok: false, error: 'No Groq API key set. In Apps Script, go to Project Settings → Script Properties, add GROQ_API_KEY. See SETUP.md.' };
+  }
+
+  const prompt = 'A job application has the details below. The notes may contain a pasted rejection email or ' +
+    'recruiter message.\n\n' +
+    'Company: ' + (job.company || 'Unknown') + '\n' +
+    'Role: ' + (job.role || 'Unknown') + '\n' +
+    'Current stage: ' + (job.status || 'unknown') + '\n' +
+    'Notes / pasted message:\n' + (job.notes ? job.notes : '(none)') + '\n\n' +
+    'In 4-6 sentences: (1) state the most likely reason for this outcome based on the text — quote or ' +
+    'paraphrase the specific line that suggests it if there is one, or say plainly if it\'s not stated; ' +
+    '(2) give one concrete, specific next step this candidate should take. Be direct and practical. ' +
+    'No headers, no markdown, no filler.';
+
+  const res = UrlFetchApp.fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + apiKey },
+    muteHttpExceptions: true,
+    payload: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: 'You are a direct, specific job-search coach. No pleasantries, no hedging beyond what the evidence supports.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.4,
+      max_tokens: 400,
+    }),
+  });
+
+  const status = res.getResponseCode();
+  let data;
+  try {
+    data = JSON.parse(res.getContentText());
+  } catch (err) {
+    return { ok: false, error: 'Groq returned an unreadable response.' };
+  }
+  if (status !== 200) {
+    return { ok: false, error: (data.error && data.error.message) || 'Groq request failed (' + status + ')' };
+  }
+  const answer = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  return { ok: true, analysis: answer || 'No response from Groq.' };
+}
+
 function doGet(e) {
-  const params = e.parameter || {};
-  if (params.token !== SECRET_TOKEN) {
-    return jsonOut_({ ok: false, error: 'Invalid token' });
-  }
+  try {
+    const params = e.parameter || {};
+    if (params.token !== SECRET_TOKEN) {
+      return jsonOut_({ ok: false, error: 'Invalid token' });
+    }
 
-  if (params.action === 'ping') {
-    const sheet = getTrackerSheet_();
-    return jsonOut_({ ok: true, sheet: sheet.getName(), count: Math.max(sheet.getLastRow() - 1, 0) });
-  }
+    if (params.action === 'ping') {
+      const info = withLock_(function () {
+        const sheet = getTrackerSheet_();
+        return { sheet: sheet.getName(), count: Math.max(sheet.getLastRow() - 1, 0) };
+      });
+      return jsonOut_(Object.assign({ ok: true }, info));
+    }
 
-  if (params.action === 'leetcode') {
-    return jsonOut_(Object.assign({ ok: true }, getLeetcodeProgress_()));
-  }
+    if (params.action === 'leetcode') {
+      return jsonOut_(Object.assign({ ok: true }, getLeetcodeProgress_()));
+    }
 
-  return jsonOut_({ ok: true, jobs: readAll_() });
+    if (params.action === 'notes') {
+      return jsonOut_({ ok: true, notes: listNotes_() });
+    }
+
+    const jobs = withLock_(function () { return readAll_(); });
+    return jsonOut_({ ok: true, jobs: jobs });
+  } catch (err) {
+    // Apps Script returns an uncaught exception as an HTML error page, not
+    // JSON — the client's res.json() would then throw a confusing parse
+    // error instead of the real message. Always answer with JSON.
+    return jsonOut_({ ok: false, error: String(err) });
+  }
 }
 
 function doPost(e) {
@@ -443,89 +715,126 @@ function doPost(e) {
   try {
     if (body.action === 'create') {
       const job = body.payload || {};
-      const status = normalizeStatus_(job.status);
-      const created = status === 'lead' ? appendLeadJob_(job, now) : appendTrackerJob_(job, now);
-      return jsonOut_({ ok: true, job: Object.assign({}, job, created) });
+      const created = withLock_(function () {
+        const status = normalizeStatus_(job.status);
+        return status === 'lead' ? appendLeadJob_(job, now) : appendTrackerJob_(job, now);
+      });
+      const fullJob = Object.assign({}, job, created);
+      upsertJobToSupabase_(fullJob);
+      return jsonOut_({ ok: true, job: fullJob });
     }
 
     if (body.action === 'update') {
       const payload = body.payload || {};
       const id = String(payload.id || '');
+      let resyncAll = false;
+      let syncedJob = null;
 
-      if (id.indexOf('l-') === 0) {
-        const leadRow = parseInt(id.slice(2), 10);
-        const promoting = payload.status && normalizeStatus_(payload.status) !== 'lead';
-        const leadsSheet = getLeadsSheet_();
-        if (promoting) {
-          setAppliedCheckbox_(leadsSheet, leadRow, true);
+      const result = withLock_(function () {
+        if (id.indexOf('l-') === 0) {
+          const leadRow = parseInt(id.slice(2), 10);
+          const promoting = payload.status && normalizeStatus_(payload.status) !== 'lead';
+          const leadsSheet = getLeadsSheet_();
+          if (promoting) {
+            setAppliedCheckbox_(leadsSheet, leadRow, true);
 
-          // Their onAppliedEdit trigger only fires for edits made through
-          // the Sheets UI, never for this API call, so its copy-to-tracker
-          // job has to happen here instead — same dedup rule it uses
-          // (skip if this company+role pair is already in the tracker).
-          const leadValues = leadsSheet.getRange(leadRow, 1, 1, LEADS_COLUMNS.length).getValues()[0];
-          const leadObj = {};
-          LEADS_COLUMNS.forEach(function (col, idx) { leadObj[col] = leadValues[idx]; });
+            // Their onAppliedEdit trigger only fires for edits made through
+            // the Sheets UI, never for this API call, so its copy-to-tracker
+            // job has to happen here instead — same dedup rule it uses
+            // (skip if this company+role pair is already in the tracker).
+            const leadValues = leadsSheet.getRange(leadRow, 1, 1, LEADS_COLUMNS.length).getValues()[0];
+            const leadObj = {};
+            LEADS_COLUMNS.forEach(function (col, idx) { leadObj[col] = leadValues[idx]; });
 
-          const trackerSheet = getTrackerSheet_();
-          const lastTrackerRow = trackerSheet.getLastRow();
-          const existingPairs = lastTrackerRow > 1
-            ? trackerSheet.getRange(2, 1, lastTrackerRow - 1, 2).getValues()
-            : [];
-          const isDup = existingPairs.some(function (r) { return r[0] === leadObj.company && r[1] === leadObj.jobTitle; });
+            const trackerSheet = getTrackerSheet_();
+            const lastTrackerRow = trackerSheet.getLastRow();
+            const existingPairs = lastTrackerRow > 1
+              ? trackerSheet.getRange(2, 1, lastTrackerRow - 1, 2).getValues()
+              : [];
+            const isDup = existingPairs.some(function (r) { return r[0] === leadObj.company && r[1] === leadObj.jobTitle; });
 
-          if (!isDup) {
-            const link = leadObj.linkedinUrl || leadObj.careersUrl || leadObj.email || '';
-            const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-            trackerSheet.appendRow([leadObj.company, leadObj.jobTitle, today, 'Applied', '-', link]);
-            applyStatusDropdown_(trackerSheet, trackerSheet.getLastRow());
+            if (!isDup) {
+              const link = leadObj.linkedinUrl || leadObj.careersUrl || leadObj.email || '';
+              const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+              trackerSheet.appendRow([leadObj.company, leadObj.jobTitle, today, 'Applied', '-', link]);
+              applyStatusDropdown_(trackerSheet, trackerSheet.getLastRow());
+            }
+            resyncAll = true; // cross-sheet move — reconcile everything rather than hand-build the new row
+            return { ok: true, promoted: true };
           }
-          return jsonOut_({ ok: true, promoted: true });
+          // Non-promoting edit of a still-a-lead row: update what we can.
+          if (payload.company !== undefined) leadsSheet.getRange(leadRow, LCOL.company + 1).setValue(payload.company);
+          if (payload.role !== undefined) leadsSheet.getRange(leadRow, LCOL.jobTitle + 1).setValue(payload.role);
+          if (payload.location !== undefined) leadsSheet.getRange(leadRow, LCOL.location + 1).setValue(payload.location);
+          if (payload.experience !== undefined) leadsSheet.getRange(leadRow, LCOL.experience + 1).setValue(payload.experience);
+          resyncAll = true;
+          return { ok: true };
         }
-        // Non-promoting edit of a still-a-lead row: update what we can.
-        if (payload.company !== undefined) leadsSheet.getRange(leadRow, LCOL.company + 1).setValue(payload.company);
-        if (payload.role !== undefined) leadsSheet.getRange(leadRow, LCOL.jobTitle + 1).setValue(payload.role);
-        if (payload.location !== undefined) leadsSheet.getRange(leadRow, LCOL.location + 1).setValue(payload.location);
-        if (payload.experience !== undefined) leadsSheet.getRange(leadRow, LCOL.experience + 1).setValue(payload.experience);
-        return jsonOut_({ ok: true });
-      }
 
-      const sheet = getTrackerSheet_();
-      const row = findTrackerRowById_(sheet, id);
-      if (row === -1) return jsonOut_({ ok: false, error: 'Job not found' });
+        const sheet = getTrackerSheet_();
+        const row = findTrackerRowById_(sheet, id);
+        if (row === -1) return { ok: false, error: 'Job not found' };
 
-      const current = {};
-      const rowValues = sheet.getRange(row, 1, 1, TRACKER_COLUMNS.length).getValues()[0];
-      TRACKER_COLUMNS.forEach(function (col, idx) { current[col] = rowValues[idx]; });
+        const current = {};
+        const rowValues = sheet.getRange(row, 1, 1, TRACKER_COLUMNS.length).getValues()[0];
+        TRACKER_COLUMNS.forEach(function (col, idx) { current[col] = rowValues[idx]; });
 
-      const updated = Object.assign({}, current, payload, { updatedAt: now });
-      if (payload.status) updated.status = normalizeStatus_(payload.status);
-      sheet.getRange(row, 1, 1, TRACKER_COLUMNS.length).setValues([rowFromTrackerJob_(updated)]);
-      return jsonOut_({ ok: true, job: updated });
+        const updated = Object.assign({}, current, payload, { updatedAt: now });
+        // Always normalize, not just when this edit touches status/date —
+        // `current.status` is the sheet's raw label ("Applied", not
+        // 'applied') and `current.dateApplied` can be a real Date object on
+        // older rows. Editing e.g. just notes must not send those back
+        // un-normalized: the client trusts this response and replaces its
+        // local job with it verbatim, so a raw label here would make the
+        // job vanish from its board column until the next poll silently
+        // fixed it.
+        updated.status = normalizeStatus_(payload.status || current.status);
+        updated.dateApplied = formatDate_(updated.dateApplied);
+        if (updated.interviewStatus === '-') updated.interviewStatus = '';
+        sheet.getRange(row, 1, 1, TRACKER_COLUMNS.length).setValues([rowFromTrackerJob_(updated)]);
+        syncedJob = updated;
+        return { ok: true, job: updated };
+      });
+
+      if (syncedJob) upsertJobToSupabase_(syncedJob);
+      if (resyncAll) resyncAllJobsToSupabase_(withLock_(function () { return readAll_(); }));
+
+      return jsonOut_(result);
     }
 
     if (body.action === 'delete') {
       const id = String((body.payload || {}).id || '');
-      if (id.indexOf('l-') === 0) {
-        const leadRow = parseInt(id.slice(2), 10);
-        getLeadsSheet_().deleteRow(leadRow);
-        return jsonOut_({ ok: true });
-      }
-      const sheet = getTrackerSheet_();
-      const row = findTrackerRowById_(sheet, id);
-      if (row === -1) return jsonOut_({ ok: false, error: 'Job not found' });
-      sheet.deleteRow(row);
+      let notFound = false;
+
+      withLock_(function () {
+        if (id.indexOf('l-') === 0) {
+          const leadRow = parseInt(id.slice(2), 10);
+          getLeadsSheet_().deleteRow(leadRow);
+          return;
+        }
+        const sheet = getTrackerSheet_();
+        const row = findTrackerRowById_(sheet, id);
+        if (row === -1) { notFound = true; return; }
+        sheet.deleteRow(row);
+      });
+
+      if (notFound) return jsonOut_({ ok: false, error: 'Job not found' });
+      deleteJobFromSupabase_(id);
       return jsonOut_({ ok: true });
     }
 
     if (body.action === 'bulkImport') {
       const jobs = (body.payload && body.payload.jobs) || [];
-      let count = 0;
-      jobs.forEach(function (job) {
-        const status = normalizeStatus_(job.status);
-        if (status === 'lead') appendLeadJob_(job, now); else appendTrackerJob_(job, now);
-        count += 1;
+      const count = withLock_(function () {
+        let c = 0;
+        jobs.forEach(function (job) {
+          const status = normalizeStatus_(job.status);
+          if (status === 'lead') appendLeadJob_(job, now); else appendTrackerJob_(job, now);
+          c += 1;
+        });
+        return c;
       });
+      resyncAllJobsToSupabase_(withLock_(function () { return readAll_(); }));
       return jsonOut_({ ok: true, count: count });
     }
 
@@ -534,16 +843,41 @@ function doPost(e) {
       if (LEETCODE_STATUSES.indexOf(payload.status) === -1) {
         return jsonOut_({ ok: false, error: 'Invalid status' });
       }
-      const lcSheet = getLeetcodeSheet_();
-      lcSheet.getRange(payload.row, 10).setValue(payload.status);
+      withLock_(function () {
+        const lcSheet = getLeetcodeSheet_();
+        lcSheet.getRange(payload.row, 10).setValue(payload.status);
+      });
       return jsonOut_({ ok: true });
     }
 
     if (body.action === 'askAI') {
       const payload = body.payload || {};
       const question = payload.question || 'Give me a quick summary of my job search.';
-      const result = askGroq_(question, payload.history, readAll_());
+      const jobs = withLock_(function () { return readAll_(); });
+      const notes = listNotes_();
+      const result = askGroq_(question, payload.history, jobs, notes);
       return jsonOut_(result);
+    }
+
+    if (body.action === 'analyzeJob') {
+      const result = analyzeRejection_(body.payload || {});
+      return jsonOut_(result);
+    }
+
+    if (body.action === 'createNote') {
+      const note = createNote_((body.payload || {}).content);
+      return jsonOut_({ ok: true, note: note });
+    }
+
+    if (body.action === 'updateNote') {
+      const payload = body.payload || {};
+      const note = updateNote_(payload.id, payload.content);
+      return jsonOut_({ ok: true, note: note });
+    }
+
+    if (body.action === 'deleteNote') {
+      deleteNote_((body.payload || {}).id);
+      return jsonOut_({ ok: true });
     }
 
     return jsonOut_({ ok: false, error: 'Unknown action' });

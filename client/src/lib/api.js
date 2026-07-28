@@ -9,19 +9,38 @@ function buildGetUrl(baseUrl, token, params = {}) {
   return url.toString();
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Retry delays for genuine network failures only (fetch rejecting before any
+// response arrives — offline, DNS, CORS, timeout). Once the server actually
+// answers — even with ok:false — we stop retrying: Apps Script has no
+// idempotency key, so retrying a request that the server received and acted
+// on (just slow to report it) risks a duplicate create/delete.
+const RETRY_DELAYS_MS = [400, 1200];
+
 async function post(baseUrl, token, action, payload) {
-  const res = await fetch(baseUrl, {
-    method: 'POST',
-    // Deliberately no Content-Type header: a JSON string body defaults to
-    // text/plain, which keeps this a CORS "simple request" (no preflight).
-    // Apps Script parses e.postData.contents as JSON regardless of the
-    // declared mime type.
-    body: JSON.stringify({ token, action, payload }),
-  });
-  if (!res.ok) throw new ApiError(`Request failed (${res.status})`);
-  const data = await res.json();
-  if (!data.ok) throw new ApiError(data.error || 'Unknown error');
-  return data;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(baseUrl, {
+        method: 'POST',
+        // Deliberately no Content-Type header: a JSON string body defaults to
+        // text/plain, which keeps this a CORS "simple request" (no preflight).
+        // Apps Script parses e.postData.contents as JSON regardless of the
+        // declared mime type.
+        body: JSON.stringify({ token, action, payload }),
+      });
+      if (!res.ok) throw new ApiError(`Request failed (${res.status})`);
+      const data = await res.json();
+      if (!data.ok) throw new ApiError(data.error || 'Unknown error');
+      return data;
+    } catch (err) {
+      const isNetworkFailure = err instanceof TypeError;
+      if (!isNetworkFailure || attempt >= RETRY_DELAYS_MS.length) throw err;
+      await sleep(RETRY_DELAYS_MS[attempt]);
+    }
+  }
 }
 
 export async function ping(url, token) {
@@ -74,6 +93,38 @@ export async function askAI(question, history = []) {
   const { url, token } = requireConfig();
   const data = await post(url, token, 'askAI', { question, history });
   return data.answer;
+}
+
+export async function analyzeJob({ company, role, status, notes }) {
+  const { url, token } = requireConfig();
+  const data = await post(url, token, 'analyzeJob', { company, role, status, notes });
+  return data.analysis;
+}
+
+export async function fetchNotes() {
+  const { url, token } = requireConfig();
+  const res = await fetch(buildGetUrl(url, token, { action: 'notes' }));
+  if (!res.ok) throw new ApiError(`Request failed (${res.status})`);
+  const data = await res.json();
+  if (!data.ok) throw new ApiError(data.error || 'Could not load notes');
+  return data.notes || [];
+}
+
+export async function createNote(content) {
+  const { url, token } = requireConfig();
+  const data = await post(url, token, 'createNote', { content });
+  return data.note;
+}
+
+export async function updateNote(id, content) {
+  const { url, token } = requireConfig();
+  const data = await post(url, token, 'updateNote', { id, content });
+  return data.note;
+}
+
+export async function deleteNote(id) {
+  const { url, token } = requireConfig();
+  await post(url, token, 'deleteNote', { id });
 }
 
 export async function fetchLeetcode() {

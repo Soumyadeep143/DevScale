@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, Sparkles } from 'lucide-react';
 import Modal from './ui/Modal';
 import { STATUSES, SOURCES } from '../lib/statusConfig';
 import { useJobs } from '../context/JobsContext';
+import { analyzeJob, ApiError } from '../lib/api';
 
 const EMPTY = {
   company: '', role: '', location: '', experience: '', status: 'lead',
@@ -32,6 +33,10 @@ export default function JobModal({ open, onClose, job }) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [err, setErr] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
+  const [analyzeErr, setAnalyzeErr] = useState('');
+  const [savingAnalysis, setSavingAnalysis] = useState(false);
   const isEdit = !!job;
   const isLead = form.status === 'lead';
 
@@ -39,8 +44,41 @@ export default function JobModal({ open, onClose, job }) {
     if (open) {
       setForm(job ? { ...EMPTY, ...job } : { ...EMPTY, dateApplied: '' });
       setErr('');
+      setAnalysis(null);
+      setAnalyzeErr('');
     }
   }, [open, job]);
+
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    setAnalyzeErr('');
+    setAnalysis(null);
+    try {
+      const result = await analyzeJob({ company: form.company, role: form.role, status: form.status, notes: form.notes });
+      setAnalysis(result);
+    } catch (error) {
+      const isConfig = error instanceof ApiError && /GROQ_API_KEY|Groq/i.test(error.message);
+      setAnalyzeErr(isConfig ? error.message : (error.message || 'Could not analyze this job.'));
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function handleSaveAnalysis() {
+    if (!analysis || !job) return;
+    const stamp = new Date().toLocaleDateString();
+    const appended = `${form.notes ? form.notes.trim() + '\n\n' : ''}--- AI analysis (${stamp}) ---\n${analysis}`;
+    setSavingAnalysis(true);
+    try {
+      await editJob(job.id, { notes: appended });
+      setForm((f) => ({ ...f, notes: appended }));
+      setAnalysis(null);
+    } catch (error) {
+      setAnalyzeErr(error.message || 'Could not save to notes.');
+    } finally {
+      setSavingAnalysis(false);
+    }
+  }
 
   function set(key) {
     return (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -138,8 +176,48 @@ export default function JobModal({ open, onClose, job }) {
 
         {!isLead && (
           <Field label="Notes / comments">
-            <textarea value={form.notes} onChange={set('notes')} rows={3} className={inputClass()} style={inputStyle()} placeholder="Anything worth remembering… the AI assistant can read this too" />
+            <textarea value={form.notes} onChange={set('notes')} rows={3} className={inputClass()} style={inputStyle()} placeholder="Anything worth remembering… paste a rejection email here and ask the AI to analyze it" />
           </Field>
+        )}
+
+        {!isLead && isEdit && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="text-xs flex items-center gap-1.5 rounded-lg px-3 py-1.5 border hover:opacity-80 disabled:opacity-50"
+              style={{ borderColor: 'var(--border)', color: 'var(--brand)' }}
+            >
+              {analyzing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              Analyze with AI
+            </button>
+
+            {analyzeErr && (
+              <p className="text-xs" style={{ color: 'var(--status-rejected)' }}>{analyzeErr}</p>
+            )}
+
+            {analysis && (
+              <div className="rounded-lg border p-3 text-xs space-y-2" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+                <p className="whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{analysis}</p>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setAnalysis(null)} className="text-xs px-2 py-1 rounded hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
+                    Dismiss
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveAnalysis}
+                    disabled={savingAnalysis}
+                    className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 disabled:opacity-60"
+                    style={{ background: 'var(--brand)' }}
+                  >
+                    {savingAnalysis && <Loader2 size={12} className="animate-spin" />}
+                    Save to notes
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
         {isLead && (
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>

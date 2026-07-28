@@ -145,12 +145,17 @@ sequenceDiagram
 - 📊 **Executive Dashboard**: Live pipeline statistics, conversion ratios, applications-over-time trend chart, and stage distribution charts powered by Recharts.
 - 🗂️ **Kanban Pipeline Board**: Drag-free card-based workflow tracking applications across `Lead`, `Applied`, `Interviewing`, and `Offer` stages.
 - 📋 **Spreadsheet Data Table**: Powerful tabular view with multi-field search, status filtering, column sorting, and inline editing.
-- 🤖 **Context-Aware AI Assistant**: Native integration with **Groq (Llama 3.3 70B)**. The AI analyzes your entire job search pipeline and notes to answer complex questions (e.g., *"Which company offers have pending deadlines?"* or *"Summarize my recent interview notes"*).
+- 🤖 **Context-Aware AI Assistant**: Native integration with **Groq (Llama 3.3 70B)**. The AI analyzes your entire job search pipeline and notes to answer complex questions (e.g., *"How many jobs have I applied to today?"* or *"Where am I failing, and what's my strategy?"*).
+- 🔍 **AI Rejection Analysis**: Paste a rejection email into a job's notes, click Analyze — the AI states the likely reason and one concrete next step, and only saves it to that job's notes if you confirm.
+- 🗒️ **Notes**: A standalone strategy log, separate from any one job, backed by Supabase — the AI assistant reads it too.
+- 🕸️ **Connections graph**: An interactive, Obsidian-style node graph of how your jobs, companies, stages, and notes relate to each other.
 - 💡 **LeetCode Interview Prep Planner**: Built-in 5-week study plan trackable by problem status, difficulty, and topic, synchronized directly with a dedicated Google Sheet.
-- 🔄 **True Two-Way Real-Time Synchronization**: 
+- 🔄 **Real-Time Synchronization across Website, Sheets, and Supabase**:
   - **App ➔ Sheets**: Edits write back to Google Sheets instantly via API calls.
-  - **Sheets ➔ App**: Automatic background polling every 10 seconds + instant refetch on window focus.
-- 📥 **Smart Bulk Importer**: Auto-detects and parses raw spreadsheet copy-pastes into structured records.
+  - **Sheets ➔ App**: Automatic background polling (10s, backing off under load) + instant refetch on window focus.
+  - **App/Sheets ➔ Supabase**: Every write mirrors into a Supabase `jobs` table — a one-way mirror (never written back), so there's no sync-loop risk.
+- 📥 **Smart Bulk Importer**: Auto-detects and parses raw spreadsheet copy-pastes into structured records, with an in-app format guide and an explicit format picker if auto-detect guesses wrong.
+- 📖 **In-app Guide**: A built-in walkthrough of the whole workflow, reachable from the nav — not just docs in the repo.
 - 📱 **Mobile & Desktop Responsive**: Clean UI designed with Tailwind CSS for seamless use on desktop monitors and mobile devices.
 - 🌗 **Light / Dark Mode**: Full theme customization to suit your preference.
 
@@ -166,7 +171,8 @@ sequenceDiagram
 | **Data Visualization** | **Recharts** | Interactive charts for pipeline analytics and application trends |
 | **Icons** | **Lucide React** | Clean, consistent icon set |
 | **API Gateway** | **Google Apps Script** | Serverless `doGet`/`doPost` JSON endpoint hosted on Google Cloud |
-| **Database Storage** | **Google Sheets** | 3 relational-style Google Workbooks (Applications, Leads, LeetCode) |
+| **Database Storage** | **Google Sheets** | 3 relational-style Google Workbooks (Applications, Leads, LeetCode) — the source of truth |
+| **Mirror Database** | **Supabase (Postgres)** | One-way mirror of jobs, plus the standalone Notes table — written to, never read from, by the sheet or app |
 | **AI LLM Engine** | **Groq (Llama 3.3 70B)** | High-speed inference engine for pipeline reasoning & chat |
 | **Hosting & CD** | **Vercel** | Edge-network global deployment for static assets |
 

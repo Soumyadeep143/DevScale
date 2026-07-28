@@ -97,3 +97,21 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+@keyframes marqueeScroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.devscale-marquee-track {
+  animation: marqueeScroll 32s linear infinite;
+}
+.devscale-marquee-track:hover {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .devscale-marquee-track {
+    animation: none;
+    overflow-x: auto;
+  }
+}

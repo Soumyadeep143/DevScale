@@ -8,11 +8,12 @@ import { useJobs } from '../context/JobsContext';
 export default function ImportModal({ open, onClose }) {
   const { importJobs } = useJobs();
   const [text, setText] = useState('');
+  const [format, setFormat] = useState('auto');
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState(null);
   const [err, setErr] = useState('');
 
-  const result = useMemo(() => parsePastedJobs(text), [text]);
+  const result = useMemo(() => parsePastedJobs(text, format), [text, format]);
 
   async function handleImport() {
     setImporting(true);
@@ -29,6 +30,7 @@ export default function ImportModal({ open, onClose }) {
 
   function handleClose() {
     setText('');
+    setFormat('auto');
     setDone(null);
     setErr('');
     onClose();
@@ -47,9 +49,49 @@ export default function ImportModal({ open, onClose }) {
       ) : (
         <div className="space-y-3">
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            In your old spreadsheet, select your data rows and copy (Ctrl+C), then paste below.
-            Works with either of your two sheet layouts — auto-detected.
+            In your old spreadsheet, select your data rows (not the header) and copy (Ctrl+C), then paste below.
           </p>
+
+          <details className="rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--border)' }}>
+            <summary className="cursor-pointer font-medium select-none" style={{ color: 'var(--text-secondary)' }}>
+              Not sure what to paste? See the expected format
+            </summary>
+            <div className="mt-2.5 space-y-3">
+              <div>
+                <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Applications sheet — 6 columns</p>
+                <p className="mb-1" style={{ color: 'var(--text-muted)' }}>Company · Role · Date Applied · Status · Interview Status · Job Link/Mail</p>
+                <code className="block rounded px-2 py-1.5 font-mono whitespace-pre-wrap break-all" style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>
+                  {'Acme Inc.\tFrontend Engineer\tJuly 24, 2026\tSent\t-\tjobs@acme.com'}
+                </code>
+              </div>
+              <div>
+                <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Job leads sheet — 12 columns</p>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  Company · Recruitment Email · Job Title · Experience · Location · Posted Time · LinkedIn URL ·
+                  Careers URL · Email Source URL · Applied · (unused) · Posted Timestamp
+                </p>
+              </div>
+              <p style={{ color: 'var(--text-muted)' }}>
+                Columns must be tab-separated (copying directly from Google Sheets does this automatically). If
+                auto-detect picks the wrong one, choose the format explicitly below.
+              </p>
+            </div>
+          </details>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium shrink-0" style={{ color: 'var(--text-muted)' }}>Format:</label>
+            <select
+              value={format}
+              onChange={(e) => setFormat(e.target.value)}
+              className="text-xs rounded-lg px-2 py-1.5 border outline-none flex-1"
+              style={{ background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            >
+              <option value="auto">Auto-detect</option>
+              <option value="sheet1">Applications sheet (6 columns)</option>
+              <option value="sheet2">Job leads sheet (12 columns)</option>
+            </select>
+          </div>
+
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}

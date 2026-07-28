@@ -57,7 +57,72 @@ storage, never in the browser.
 Skip this step if you don't want the assistant; the rest of the app works
 fine without it.
 
-## 5. Run the app locally
+## 5. (Optional) Turn on Notes + the Supabase mirror
+
+Two extra features are backed by [Supabase](https://supabase.com) (a free hosted
+Postgres database): the standalone **Notes** tab (general strategy notes, not
+tied to one job), and a live mirror of your jobs in a real database — useful
+if you ever want to query or build on top of your data outside Google Sheets.
+Google Sheets stays the single source of truth either way; Supabase is only
+ever written *to*, never read *from* by the sheet or the app's own display.
+
+1. Go to [supabase.com](https://supabase.com), sign in, and create a new
+   project (the free tier is plenty).
+2. Open the **SQL Editor** and run:
+   ```sql
+   create table notes (
+     id uuid primary key default gen_random_uuid(),
+     content text not null,
+     created_at timestamptz not null default now(),
+     updated_at timestamptz not null default now()
+   );
+   alter table notes enable row level security;
+
+   create table jobs (
+     id text primary key,
+     company text,
+     role text,
+     status text,
+     date_applied text,
+     interview_status text,
+     contact text,
+     source text,
+     location text,
+     experience text,
+     posted_time text,
+     notes text,
+     created_at text,
+     updated_at text,
+     synced_at timestamptz
+   );
+   alter table jobs enable row level security;
+   ```
+   Enabling row-level security with no policies means the tables are locked
+   down from the public `anon` key entirely — only the `service_role` key
+   (server-side only, see next step) can read or write them.
+3. In your Supabase project: **Project Settings → API**. Copy the **Project
+   URL** and the **`service_role`** secret key (not the `anon` key — the
+   `anon` key is meant to be public-safe, `service_role` is the one that
+   bypasses row-level security and must stay private).
+4. Back in the Apps Script editor: **Project Settings** → **Script
+   Properties** → **Add script property**, twice:
+   - `SUPABASE_URL` → your Project URL
+   - `SUPABASE_SERVICE_KEY` → the `service_role` key
+5. Save. No redeploy needed. Notes now works, and every add/edit/delete/import
+   made through the website mirrors into the `jobs` table automatically.
+6. *(Optional, for hand-typed sheet edits to reach Supabase quickly too)*: in
+   the Apps Script editor, click the **Triggers** icon (clock, left sidebar)
+   → **Add Trigger** → choose function `onTrackerEdit` → event source **From
+   spreadsheet** → event type **On edit** → **Save**. Without this, a manual
+   edit typed straight into the sheet still shows up correctly on the website
+   (via its normal polling) — it just won't reach the Supabase mirror until
+   the next time you add, edit, delete, or import something from the website.
+
+Skip this whole section if you don't want Notes or the Supabase mirror — the
+rest of the app works fine without it; the Notes tab will just show a message
+explaining it isn't set up.
+
+## 6. Run the app locally
 
 ```
 cd client
@@ -72,7 +137,7 @@ The first time you open it, paste in the Web App URL and token from step 3.
 They're saved in the browser (localStorage), so you only do this once per
 device/browser.
 
-## 6. Deploy to Vercel (access from anywhere, not just your Wi-Fi)
+## 7. Deploy to Vercel (access from anywhere, not just your Wi-Fi)
 
 The app is a static site — it talks straight to Google from the browser, so
 there's nothing to host except static files. Vercel's free tier is plenty.
@@ -92,7 +157,7 @@ URL that works from any device, on or off your home Wi-Fi. Re-run
 The Setup screen (URL + token) is entered per-browser, so open the Vercel URL
 on your phone once and connect it there too.
 
-## 7. Import your existing applications (optional, one-time)
+## 8. Import your existing applications (optional, one-time)
 
 Open your old spreadsheet, select your data rows (not the header), copy
 (Ctrl+C), then in Job Tracker go to **Import** and paste. It auto-detects
@@ -112,10 +177,18 @@ sheet's `notes` column. The AI assistant reads it too.
 
 - App → Sheet: instant. Every add/edit/delete/move writes straight to the row.
 - Sheet → App: the app polls every 10 seconds while the tab is open and
-  visible, and refreshes immediately the moment you switch back to it. Type a
-  new row by hand, or edit a `status`/`notes` cell directly — it'll show up
-  in the app within a few seconds, and gets a proper `id` assigned
-  automatically the next time it's read.
+  visible (backing off to every 30 seconds if the tracker starts reporting
+  errors, e.g. under heavy concurrent use), and refreshes immediately the
+  moment you switch back to it. Type a new row by hand, or edit a
+  `status`/`notes` cell directly — it'll show up in the app within a few
+  seconds, and gets a proper `id` assigned automatically the next time it's
+  read.
+- App/Sheet → Supabase: if you completed step 5, every add/edit/delete/import
+  made through the website also mirrors into Supabase's `jobs` table right
+  after the sheet write. A manual sheet edit reaches Supabase immediately too
+  if you installed the `onTrackerEdit` trigger, or on the next website-driven
+  change otherwise. Supabase never writes back to the sheet or the app — it's
+  a one-way mirror, which is what keeps this safe from sync loops.
 
 ## Redeploying after you edit Code.gs
 

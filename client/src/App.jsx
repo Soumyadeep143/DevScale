@@ -10,6 +10,9 @@ import Progress from './components/Progress';
 import JobModal from './components/JobModal';
 import ImportModal from './components/ImportModal';
 import AIAssistant from './components/AIAssistant';
+import NotesPanel from './components/NotesPanel';
+import GraphView from './components/GraphView';
+import Guide from './components/Guide';
 import { Loader2 } from 'lucide-react';
 
 function AppInner() {
@@ -44,6 +47,12 @@ function AppInner() {
       >
         {view === 'progress' ? (
           <Progress />
+        ) : view === 'notes' ? (
+          <NotesPanel />
+        ) : view === 'graph' ? (
+          <GraphView theme={theme} onOpen={(job) => setJobModal({ open: true, job })} onOpenNotes={() => setView('notes')} />
+        ) : view === 'guide' ? (
+          <Guide />
         ) : loading && jobs.length === 0 ? (
           <div className="flex items-center justify-center py-24" style={{ color: 'var(--text-muted)' }}>
             <Loader2 size={20} className="animate-spin mr-2" /> Loading your jobs…

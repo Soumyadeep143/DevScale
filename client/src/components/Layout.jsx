@@ -1,11 +1,15 @@
-import { LayoutDashboard, Kanban, Table2, ListChecks, Plus, Upload, Sun, Moon, Search, RefreshCw, WifiOff } from 'lucide-react';
+import { LayoutDashboard, Kanban, Table2, ListChecks, StickyNote, Share2, HelpCircle, Plus, Upload, Sun, Moon, Search, RefreshCw, WifiOff } from 'lucide-react';
 import { useJobs } from '../context/JobsContext';
+import PortalMarquee from './PortalMarquee';
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'board', label: 'Board', icon: Kanban },
   { id: 'table', label: 'Table', icon: Table2 },
   { id: 'progress', label: 'LeetCode', icon: ListChecks },
+  { id: 'notes', label: 'Notes', icon: StickyNote },
+  { id: 'graph', label: 'Graph', icon: Share2 },
+  { id: 'guide', label: 'Guide', icon: HelpCircle },
 ];
 
 export default function Layout({ view, setView, search, setSearch, onAdd, onImport, theme, toggleTheme, children }) {
@@ -103,6 +107,10 @@ export default function Layout({ view, setView, search, setSearch, onAdd, onImpo
         )}
         {children}
       </main>
+
+      <div className="max-w-6xl mx-auto px-3 sm:px-5">
+        <PortalMarquee />
+      </div>
 
       <footer className="max-w-6xl mx-auto px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>
         {lastSynced ? `Synced with Google Sheets · ${lastSynced.toLocaleTimeString()}` : ''}

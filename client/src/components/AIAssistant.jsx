@@ -3,10 +3,10 @@ import { Sparkles, Send, Loader2, X } from 'lucide-react';
 import { askAI, ApiError } from '../lib/api';
 
 const QUICK_PROMPTS = [
-  'How many jobs do I still need to apply to?',
+  'How many jobs have I applied to today?',
+  'Where am I failing, and what should my strategy be?',
   "Summarize what's in my rejected applications",
   'What should I follow up on this week?',
-  'How is my response rate trending?',
 ];
 
 export default function AIAssistant() {
