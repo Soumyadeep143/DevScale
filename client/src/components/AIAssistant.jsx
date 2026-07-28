@@ -68,7 +68,7 @@ export default function AIAssistant() {
                 <Sparkles size={16} style={{ color: 'var(--brand)' }} />
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>AI Assistant</h2>
               </div>
-              <button onClick={() => setOpen(false)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:opacity-70" style={{ color: 'var(--text-secondary)' }}>
+              <button onClick={() => setOpen(false)} className="w-9 h-9 rounded-lg flex items-center justify-center hover:opacity-70" style={{ color: 'var(--text-secondary)' }} aria-label="Close assistant">
                 <X size={16} />
               </button>
             </div>

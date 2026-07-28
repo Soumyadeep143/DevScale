@@ -15,11 +15,12 @@
   --grid: #e1e0d9;
   --axis: #c3c2b7;
 
-  --brand: #2a78d6;
-  --brand-strong: #1c5cab;
+  /* DevScale brand blue + navy, sampled directly from the logo lockup. */
+  --brand: #0148b5;
+  --brand-strong: #001b4d;
 
   --status-lead: #898781;
-  --status-applied: #2a78d6;
+  --status-applied: #0148b5;
   --status-interviewing: #c98500;
   --status-offer: #0ca30c;
   --status-rejected: #d03b3b;
@@ -42,11 +43,12 @@
   --grid: #2c2c2a;
   --axis: #383835;
 
-  --brand: #3987e5;
-  --brand-strong: #6da7ec;
+  /* Same brand hue family, brightened for legibility on a near-black page. */
+  --brand: #4c7eff;
+  --brand-strong: #8aacff;
 
   --status-lead: #a8a6a0;
-  --status-applied: #3987e5;
+  --status-applied: #4c7eff;
   --status-interviewing: #fab219;
   --status-offer: #0ca30c;
   --status-rejected: #e66767;
@@ -74,6 +76,14 @@ body {
 
 ::selection {
   background: color-mix(in oklab, var(--brand) 30%, transparent);
+}
+
+/* Consistent, visible keyboard focus everywhere — cards, buttons, links,
+   inputs — instead of relying on each component to remember one. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 .scrollbar-thin::-webkit-scrollbar {

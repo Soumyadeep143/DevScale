@@ -26,6 +26,48 @@ const PALETTE = {
 
 const STAGE_LABEL = { lead: 'Lead', applied: 'Applied', interviewing: 'Interviewing', offer: 'Offer', rejected: 'Rejected' };
 
+// One physics step, shared by the per-frame animation loop and the
+// reduced-motion pre-settle pass below — kept outside the component so
+// neither caller needs a live closure over React state.
+function stepPhysics(nodes, edges) {
+  const n = nodes.length;
+  for (let i = 0; i < n; i++) {
+    const a = nodes[i];
+    if (a.fixed) continue;
+    let fx = 0, fy = 0;
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const b = nodes[j];
+      const dx = a.x - b.x, dy = a.y - b.y;
+      const distSq = Math.max(dx * dx + dy * dy, 25);
+      const f = REPULSION / distSq;
+      const dist = Math.sqrt(distSq);
+      fx += (dx / dist) * f;
+      fy += (dy / dist) * f;
+    }
+    fx -= a.x * CENTER_K;
+    fy -= a.y * CENTER_K;
+    a.fx = fx; a.fy = fy;
+  }
+
+  edges.forEach((e) => {
+    const dx = e.target.x - e.source.x, dy = e.target.y - e.source.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const diff = (dist - e.len) * SPRING_K;
+    const ux = dx / dist, uy = dy / dist;
+    if (!e.source.fixed) { e.source.fx += ux * diff; e.source.fy += uy * diff; }
+    if (!e.target.fixed) { e.target.fx -= ux * diff; e.target.fy -= uy * diff; }
+  });
+
+  nodes.forEach((node) => {
+    if (node.fixed) return;
+    node.vx = (node.vx + (node.fx || 0)) * DAMPING;
+    node.vy = (node.vy + (node.fy || 0)) * DAMPING;
+    node.x += node.vx;
+    node.y += node.vy;
+  });
+}
+
 const R = { stage: 11, company: 9, job: 6, note: 6 };
 const IDEAL_LEN = { jobCompany: 65, jobStage: 105, noteJob: 90 };
 const REPULSION = 1600;
@@ -114,53 +156,28 @@ export default function GraphView({ theme, onOpen, onOpenNotes }) {
       .map((e) => ({ ...e, source: nodesById.get(e.source), target: nodesById.get(e.target) }))
       .filter((e) => e.source && e.target);
     simRef.current = { nodes, nodesById, edges };
+
+    // Someone with prefers-reduced-motion set shouldn't see the layout
+    // crawl into place — settle it synchronously up front instead, before
+    // the first draw, then the per-frame loop below leaves it alone.
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      for (let i = 0; i < 250; i++) stepPhysics(nodes, edges);
+    }
   }, [rawNodes, rawEdges]);
 
   // Physics + draw loop. Runs continuously (settles naturally once
   // velocities go near zero) — cheap at personal-tracker node counts.
+  // Skips the ambient force simulation under prefers-reduced-motion (the
+  // layout was already pre-settled above); dragging still works either way
+  // since a dragged node is marked `fixed` and gets its position set
+  // directly from the pointer, never from force integration.
   useEffect(() => {
     const palette = PALETTE[theme === 'dark' ? 'dark' : 'light'];
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
     function tick() {
       const { nodes, edges } = simRef.current;
-      const n = nodes.length;
-
-      for (let i = 0; i < n; i++) {
-        const a = nodes[i];
-        if (a.fixed) continue;
-        let fx = 0, fy = 0;
-        for (let j = 0; j < n; j++) {
-          if (i === j) continue;
-          const b = nodes[j];
-          const dx = a.x - b.x, dy = a.y - b.y;
-          const distSq = Math.max(dx * dx + dy * dy, 25);
-          const f = REPULSION / distSq;
-          const dist = Math.sqrt(distSq);
-          fx += (dx / dist) * f;
-          fy += (dy / dist) * f;
-        }
-        fx -= a.x * CENTER_K;
-        fy -= a.y * CENTER_K;
-        a.fx = fx; a.fy = fy;
-      }
-
-      edges.forEach((e) => {
-        const dx = e.target.x - e.source.x, dy = e.target.y - e.source.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const diff = (dist - e.len) * SPRING_K;
-        const ux = dx / dist, uy = dy / dist;
-        if (!e.source.fixed) { e.source.fx += ux * diff; e.source.fy += uy * diff; }
-        if (!e.target.fixed) { e.target.fx -= ux * diff; e.target.fy -= uy * diff; }
-      });
-
-      nodes.forEach((node) => {
-        if (node.fixed) return;
-        node.vx = (node.vx + (node.fx || 0)) * DAMPING;
-        node.vy = (node.vy + (node.fy || 0)) * DAMPING;
-        node.x += node.vx;
-        node.y += node.vy;
-      });
-
+      if (!reduceMotion) stepPhysics(nodes, edges);
       draw(palette);
       rafRef.current = requestAnimationFrame(tick);
     }
@@ -390,7 +407,7 @@ export default function GraphView({ theme, onOpen, onOpenNotes }) {
           <div className="absolute top-2.5 right-2.5 max-w-xs rounded-lg border p-3 text-xs" style={{ background: 'var(--surface-2)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-md)' }}>
             <div className="flex items-center justify-between mb-1.5">
               <span className="font-medium" style={{ color: 'var(--text-primary)' }}>Note</span>
-              <button onClick={() => setPreviewNote(null)} className="hover:opacity-70" style={{ color: 'var(--text-muted)' }} aria-label="Close">
+              <button onClick={() => setPreviewNote(null)} className="w-7 h-7 -m-1 rounded-md flex items-center justify-center hover:opacity-70" style={{ color: 'var(--text-muted)' }} aria-label="Close">
                 <X size={13} />
               </button>
             </div>

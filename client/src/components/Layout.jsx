@@ -1,6 +1,7 @@
 import { LayoutDashboard, Kanban, Table2, ListChecks, StickyNote, Share2, HelpCircle, Plus, Upload, Sun, Moon, Search, RefreshCw, WifiOff } from 'lucide-react';
 import { useJobs } from '../context/JobsContext';
 import PortalMarquee from './PortalMarquee';
+import logoIcon from '../assets/logo-icon.jpg';
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -21,8 +22,16 @@ export default function Layout({ view, setView, search, setSearch, onAdd, onImpo
         <div className="max-w-6xl mx-auto px-3 sm:px-5">
           <div className="flex items-center gap-3 h-14">
             <div className="flex items-center gap-2 shrink-0">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ background: 'var(--brand)' }}>D</div>
-              <span className="font-semibold text-sm hidden sm:inline" style={{ color: 'var(--text-primary)' }}>DevScale</span>
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden border p-0.5"
+                style={{ background: '#ffffff', borderColor: 'var(--border)' }}
+              >
+                <img src={logoIcon} alt="" className="w-full h-full object-contain rounded-[3px]" />
+              </div>
+              <span className="font-semibold text-sm hidden sm:inline">
+                <span style={{ color: 'var(--brand-strong)' }}>Dev</span>
+                <span style={{ color: 'var(--brand)' }}>scale</span>
+              </span>
             </div>
 
             <div className="flex-1 min-w-0">
@@ -64,7 +73,7 @@ export default function Layout({ view, setView, search, setSearch, onAdd, onImpo
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
                 style={{ background: 'var(--brand)' }}
               >
-                <Plus size={15} /> <span className="hidden xs:inline">Add job</span>
+                <Plus size={15} /> <span className="hidden sm:inline">Add job</span>
               </button>
             </div>
           </div>

@@ -150,13 +150,13 @@ export default function NotesPanel() {
                     style={{ background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                   />
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setEditingId(null)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:opacity-70" style={{ color: 'var(--text-muted)' }} aria-label="Cancel">
+                    <button onClick={() => setEditingId(null)} className="w-9 h-9 rounded-lg flex items-center justify-center hover:opacity-70" style={{ color: 'var(--text-muted)' }} aria-label="Cancel">
                       <X size={14} />
                     </button>
                     <button
                       onClick={() => saveEdit(note.id)}
                       disabled={busyId === note.id}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-white disabled:opacity-50"
+                      className="w-9 h-9 rounded-lg flex items-center justify-center text-white disabled:opacity-50"
                       style={{ background: 'var(--brand)' }}
                       aria-label="Save"
                     >
@@ -170,13 +170,13 @@ export default function NotesPanel() {
                   <div className="flex items-center justify-between mt-2.5 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{timeAgo(note.updated_at || note.created_at)}</span>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => startEdit(note)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:opacity-70" style={{ color: 'var(--text-secondary)' }} aria-label="Edit">
+                      <button onClick={() => startEdit(note)} className="w-9 h-9 rounded-lg flex items-center justify-center hover:opacity-70" style={{ color: 'var(--text-secondary)' }} aria-label="Edit">
                         <Pencil size={13} />
                       </button>
                       <button
                         onClick={() => handleDelete(note.id)}
                         disabled={busyId === note.id}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center hover:opacity-70 disabled:opacity-50"
+                        className="w-9 h-9 rounded-lg flex items-center justify-center hover:opacity-70 disabled:opacity-50"
                         style={{ color: 'var(--status-rejected)' }}
                         aria-label="Delete"
                       >

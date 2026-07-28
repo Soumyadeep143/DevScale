@@ -1,12 +1,15 @@
 import { SiIndeed, SiGreenhouse, SiGlassdoor, SiYcombinator, SiWellfound, SiSap, SiMonster } from 'react-icons/si';
+import { FaLinkedin } from 'react-icons/fa6';
 
-// Real brand glyphs only where an open, CC0-licensed mark exists (simple-icons) —
-// a handful of well-known ATS/portals (LinkedIn, ZipRecruiter, SmartRecruiters,
-// Workday, Lever, Naukri, Internshala) were intentionally excluded from that set
-// at the trademark holders' request, so those show as plain colored text instead
-// of a hand-drawn logo.
+// Real brand glyphs wherever a legitimately licensed icon set has one
+// (simple-icons, Font Awesome Free brands). A handful of ATS/portals
+// (ZipRecruiter, SmartRecruiters, Workday, Lever, Naukri, Internshala) have
+// no icon in either set, so those get a monogram badge instead — same
+// visual weight and "logo" treatment as the ones with real glyphs, just
+// built from the wordmark rather than a hand-drawn copy of a mark we don't
+// have rights to reproduce.
 const PORTALS = [
-  { name: 'LinkedIn', color: '#0A66C2' },
+  { name: 'LinkedIn', color: '#0A66C2', Icon: FaLinkedin },
   { name: 'Indeed', color: '#003A9B', Icon: SiIndeed },
   { name: 'Greenhouse', color: '#24A47F', Icon: SiGreenhouse },
   { name: 'Lever', color: '#8C50FF' },
@@ -22,6 +25,18 @@ const PORTALS = [
   { name: 'Internshala', color: '#0C4595' },
 ];
 
+function Monogram({ letter, color }) {
+  return (
+    <span
+      className="flex items-center justify-center rounded-[5px] text-[10px] font-bold text-white shrink-0"
+      style={{ width: 16, height: 16, background: color }}
+      aria-hidden="true"
+    >
+      {letter}
+    </span>
+  );
+}
+
 function PortalChip({ portal }) {
   const { name, color, Icon } = portal;
   return (
@@ -30,7 +45,7 @@ function PortalChip({ portal }) {
       style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', boxShadow: 'var(--shadow-sm)' }}
     >
       <span className="flex items-center justify-center" style={{ color }}>
-        {Icon ? <Icon size={16} /> : <span className="w-2 h-2 rounded-full" style={{ background: color }} />}
+        {Icon ? <Icon size={16} /> : <Monogram letter={name[0]} color={color} />}
       </span>
       <span className="text-xs font-medium whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{name}</span>
     </div>

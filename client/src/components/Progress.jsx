@@ -93,7 +93,7 @@ export default function Progress() {
       <div className="rounded-xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Overall progress</h2>
-          <button onClick={load} className="w-7 h-7 rounded-lg flex items-center justify-center hover:opacity-70" style={{ color: 'var(--text-secondary)' }}>
+          <button onClick={load} className="w-9 h-9 rounded-lg flex items-center justify-center hover:opacity-70" style={{ color: 'var(--text-secondary)' }} aria-label="Refresh progress">
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>

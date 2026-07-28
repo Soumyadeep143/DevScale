@@ -13,7 +13,7 @@ import AIAssistant from './components/AIAssistant';
 import NotesPanel from './components/NotesPanel';
 import GraphView from './components/GraphView';
 import Guide from './components/Guide';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Briefcase } from 'lucide-react';
 
 function AppInner() {
   const { configured, jobs, loading } = useJobs();
@@ -78,13 +78,19 @@ function AppInner() {
 function EmptyState({ onAdd, onImport }) {
   return (
     <div className="text-center py-20">
+      <div
+        className="mx-auto mb-4 w-14 h-14 rounded-2xl flex items-center justify-center"
+        style={{ background: 'color-mix(in oklab, var(--brand) 12%, var(--surface))' }}
+      >
+        <Briefcase size={24} style={{ color: 'var(--brand)' }} />
+      </div>
       <p className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>No jobs yet</p>
       <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>Add your first job, or import your existing list from Google Sheets.</p>
       <div className="flex items-center justify-center gap-2">
-        <button onClick={onAdd} className="rounded-lg px-4 py-2 text-sm font-medium text-white" style={{ background: 'var(--brand)' }}>
+        <button onClick={onAdd} className="rounded-lg px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity" style={{ background: 'var(--brand)' }}>
           Add a job
         </button>
-        <button onClick={onImport} className="rounded-lg px-4 py-2 text-sm border" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+        <button onClick={onImport} className="rounded-lg px-4 py-2.5 text-sm border hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
           Import
         </button>
       </div>

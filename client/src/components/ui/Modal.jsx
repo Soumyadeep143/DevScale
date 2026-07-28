@@ -1,17 +1,55 @@
-import { useEffect } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export default function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }) {
+  const titleId = useId();
+  const panelRef = useRef(null);
+  const lastFocused = useRef(null);
+
   useEffect(() => {
     if (!open) return;
-    function onKey(e) {
-      if (e.key === 'Escape') onClose();
+
+    // Remember what had focus so it can be restored on close, then move
+    // focus into the dialog — without this, a screen reader or keyboard
+    // user stays "behind" the modal on the page underneath it. If a form
+    // field inside already grabbed focus via its own autoFocus (React
+    // applies that during commit, before this effect runs), leave it —
+    // don't clobber a more specific autoFocus with the header's Close
+    // button just because it's first in DOM order.
+    lastFocused.current = document.activeElement;
+    const panel = panelRef.current;
+    if (panel && !panel.contains(document.activeElement)) {
+      const focusable = panel.querySelectorAll(FOCUSABLE);
+      (focusable[0] || panel).focus();
     }
+
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !panel) return;
+      const items = [...panel.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
+      lastFocused.current?.focus?.();
     };
   }, [open, onClose]);
 
@@ -24,14 +62,19 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className={`w-full ${maxWidth} rounded-t-2xl sm:rounded-2xl border max-h-[92vh] flex flex-col animate-[modalIn_.18s_ease-out]`}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={`w-full ${maxWidth} rounded-t-2xl sm:rounded-2xl border max-h-[92vh] flex flex-col animate-[modalIn_.18s_ease-out] outline-none`}
         style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-lg)' }}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
-          <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
+          <h2 id={titleId} className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:opacity-70"
+            className="w-9 h-9 -mr-1 rounded-lg flex items-center justify-center transition-colors hover:opacity-70"
             style={{ color: 'var(--text-secondary)' }}
             aria-label="Close"
           >

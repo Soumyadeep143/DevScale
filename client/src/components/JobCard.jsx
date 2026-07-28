@@ -1,11 +1,12 @@
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin } from 'lucide-react';
-import { STATUSES } from '../lib/statusConfig';
+import { STATUSES, statusMeta } from '../lib/statusConfig';
 import { useJobs } from '../context/JobsContext';
 import { contactHref } from '../lib/contact';
 
 export default function JobCard({ job, onOpen }) {
   const { editJob, promoteLead } = useJobs();
   const idx = STATUSES.findIndex((s) => s.id === job.status);
+  const stageColor = statusMeta(job.status).color;
 
   function move(dir, e) {
     e.stopPropagation();
@@ -24,8 +25,8 @@ export default function JobCard({ job, onOpen }) {
       tabIndex={0}
       onClick={() => onOpen(job)}
       onKeyDown={(e) => e.key === 'Enter' && onOpen(job)}
-      className="rounded-xl border p-3.5 cursor-pointer transition-shadow hover:shadow-md text-left w-full"
-      style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}
+      className="rounded-xl border p-3.5 cursor-pointer transition-all duration-150 hover:shadow-md hover:-translate-y-0.5 text-left w-full"
+      style={{ background: 'var(--surface)', borderColor: 'var(--border)', borderLeft: `3px solid ${stageColor}`, boxShadow: 'var(--shadow-sm)' }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -38,7 +39,7 @@ export default function JobCard({ job, onOpen }) {
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center hover:opacity-70"
+            className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-70"
             style={{ color: 'var(--text-muted)' }}
             aria-label="Open job link"
           >
@@ -68,7 +69,7 @@ export default function JobCard({ job, onOpen }) {
         <button
           onClick={(e) => move(-1, e)}
           disabled={idx <= 0}
-          className="w-6 h-6 rounded-md flex items-center justify-center disabled:opacity-25 hover:opacity-70"
+          className="w-8 h-8 rounded-md flex items-center justify-center disabled:opacity-25 hover:opacity-70"
           style={{ color: 'var(--text-secondary)' }}
           aria-label="Move to previous stage"
         >
@@ -80,7 +81,7 @@ export default function JobCard({ job, onOpen }) {
         <button
           onClick={(e) => move(1, e)}
           disabled={idx >= STATUSES.length - 1}
-          className="w-6 h-6 rounded-md flex items-center justify-center disabled:opacity-25 hover:opacity-70"
+          className="w-8 h-8 rounded-md flex items-center justify-center disabled:opacity-25 hover:opacity-70"
           style={{ color: 'var(--text-secondary)' }}
           aria-label="Move to next stage"
         >
