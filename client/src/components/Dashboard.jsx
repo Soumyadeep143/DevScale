@@ -49,7 +49,7 @@ export default function Dashboard({ jobs, onOpen }) {
         <div>
           <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Recently updated</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {recent.map((job) => <JobCard key={job.id} job={job} onOpen={onOpen} />)}
+            {recent.map((job) => <JobCard key={job.id} job={job} onOpen={(j) => onOpen(j, recent)} />)}
           </div>
         </div>
       )}

@@ -7,6 +7,15 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
   const titleId = useId();
   const panelRef = useRef(null);
   const lastFocused = useRef(null);
+  // Read through a ref instead of taking onClose as an effect dependency —
+  // callers frequently pass an inline arrow that gets a new identity on
+  // every one of their re-renders (e.g. App re-renders on every background
+  // poll tick). If the effect below depended on onClose directly, it would
+  // tear down and re-run on those unrelated renders too, which yanks focus
+  // out of whatever's active (like a form field mid-type) and back onto the
+  // dialog's first focusable element every time.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -27,7 +36,7 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
 
     function onKey(e) {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !panel) return;
@@ -51,7 +60,10 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
       document.body.style.overflow = '';
       lastFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+    // Deliberately excludes onClose — see onCloseRef above. This effect
+    // should only run when the dialog actually opens/closes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 

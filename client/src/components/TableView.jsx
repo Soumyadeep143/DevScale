@@ -71,7 +71,7 @@ export default function TableView({ jobs, onOpen }) {
             {sorted.map((job) => (
               <tr
                 key={job.id}
-                onClick={() => onOpen(job)}
+                onClick={() => onOpen(job, sorted)}
                 className="border-b last:border-b-0 cursor-pointer transition-colors hover:opacity-90"
                 style={{ borderColor: 'var(--border)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}

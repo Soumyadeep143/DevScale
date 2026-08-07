@@ -38,3 +38,9 @@ Thumbs.db
 desktop.ini
 
 *.local
+
+# Local task-planning notes (not part of the public repo/docs)
+docs/plan.md
+docs/agent.md
+docs/roadmap.md
+docs/outcome.md

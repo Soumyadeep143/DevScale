@@ -29,7 +29,7 @@ export default function Board({ jobs, onOpen }) {
                 <p className="text-xs text-center py-8" style={{ color: 'var(--text-muted)' }}>Nothing here</p>
               )}
               {columnJobs.map((job) => (
-                <JobCard key={job.id} job={job} onOpen={onOpen} />
+                <JobCard key={job.id} job={job} onOpen={(j) => onOpen(j, columnJobs)} />
               ))}
             </div>
           </div>
