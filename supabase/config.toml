@@ -1,0 +1,10 @@
+# Minimal Supabase CLI config for DevScale (local dev / `supabase test db`).
+# The hosted project is hoadvtmioqtfxjnqxwty; migrations in ./migrations are the source of truth.
+project_id = "devscale"
+
+[auth]
+# Invite-only: accounts are created from the dashboard, never self-registered.
+enable_signup = false
+
+[functions.ai]
+verify_jwt = true
