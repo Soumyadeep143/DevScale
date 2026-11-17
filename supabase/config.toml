@@ -1,0 +1,25 @@
+# Minimal Supabase CLI config for DevScale (local dev / `supabase test db`).
+# The hosted project is hoadvtmioqtfxjnqxwty; migrations in ./migrations are the source of truth.
+project_id = "devscale"
+
+[auth]
+# People create their own accounts; email must be confirmed before they can sign in.
+enable_signup = true
+
+[auth.email]
+enable_confirmations = true
+
+[functions.ai]
+verify_jwt = true
+
+[functions.notify]
+# Called by database triggers with a shared secret (x-notify-secret), not by signed-in users.
+verify_jwt = false
+
+[auth.email.template.confirmation]
+subject = "Confirm your DevScale account"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your DevScale password"
+content_path = "./supabase/templates/recovery.html"

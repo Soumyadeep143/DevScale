@@ -3,22 +3,23 @@ import { ChevronLeft, ChevronRight, Loader2, Trash2, Sparkles } from 'lucide-rea
 import Modal from './ui/Modal';
 import { STATUSES, SOURCES } from '../lib/statusConfig';
 import { useJobs } from '../context/JobsContext';
-import { analyzeJob, ApiError } from '../lib/api';
+import { analyzeJob, ApiError, parseJobsWithAI } from '../lib/api';
+import { jobUrlError, leadError } from '../lib/leadRules';
 
 const EMPTY = {
   company: '', role: '', location: '', experience: '', status: 'lead',
   dateApplied: '', interviewStatus: '', contact: '', source: 'Manual',
-  postedTime: '', notes: '',
+  postedTime: '', notes: '', description: '', jobUrl: '', visibility: 'personal',
 };
 
-// Fields the Apps Script backend actually persists for a still-a-lead row
-// (see the `update` action's non-promoting branch in apps-script/Code.gs —
-// it writes company/role/location/experience directly to the leads sheet;
-// contact/source aren't wired up there, a pre-existing backend gap outside
-// this fix's scope). Promoting a lead re-reads the row straight from that
-// sheet to build the new tracker row, so these have to land on the sheet
-// *before* the promote call, or promoteLead would copy over stale values.
-const LEAD_EDITABLE_FIELDS = ['company', 'role', 'location', 'experience'];
+// Fields persisted on a still-a-lead row. Promoting a lead (the promote_lead()
+// function) copies the row as it is stored, so edits made in the same save have
+// to land on the lead *before* the promote call, or the new job would be built
+// from stale values.
+const LEAD_EDITABLE_FIELDS = [
+  'company', 'role', 'location', 'experience', 'contact', 'source',
+  'description', 'jobUrl', 'visibility',
+];
 
 function inputClass() {
   return 'w-full rounded-lg px-3 py-2 text-sm outline-none border focus:ring-2';
@@ -47,6 +48,11 @@ export default function JobModal({ open, onClose, job, hasPrev, hasNext, onPrev,
   const [analysis, setAnalysis] = useState(null);
   const [analyzeErr, setAnalyzeErr] = useState('');
   const [savingAnalysis, setSavingAnalysis] = useState(false);
+  // "Paste a posting" auto-fill (new jobs only): the AI reads free text and fills the form for review.
+  const [paste, setPaste] = useState('');
+  const [filling, setFilling] = useState(false);
+  const [fillMsg, setFillMsg] = useState('');
+  const [fillErr, setFillErr] = useState('');
   const isEdit = !!job;
   const isLead = form.status === 'lead';
 
@@ -57,8 +63,42 @@ export default function JobModal({ open, onClose, job, hasPrev, hasNext, onPrev,
       setAnalysis(null);
       setAnalyzeErr('');
       setConfirmingDelete(false);
+      setPaste('');
+      setFillMsg('');
+      setFillErr('');
     }
   }, [open, job]);
+
+  async function handleAutoFill() {
+    setFilling(true);
+    setFillErr('');
+    setFillMsg('');
+    try {
+      const { jobs, notices = [] } = await parseJobsWithAI(paste);
+      if (jobs.length === 0) { setFillErr('The AI could not find a job in that text. Try pasting more of it.'); return; }
+      const j = jobs[0];
+      const known = SOURCES.find((x) => x.toLowerCase() === String(j.source || '').toLowerCase());
+      // Only fields the AI actually found are filled; nothing already typed is blanked.
+      setForm((f) => {
+        const next = { ...f };
+        for (const k of ['company', 'role', 'location', 'experience', 'jobUrl', 'contact', 'description', 'interviewStatus']) if (j[k]) next[k] = j[k];
+        if (known) next.source = known;
+        if (j.status) next.status = j.status;
+        if (j.dateApplied) next.dateApplied = j.dateApplied;
+        if (j.notes && !f.notes) next.notes = j.notes;
+        return next;
+      });
+      setFillMsg([jobs.length > 1
+        ? `Found ${jobs.length} jobs and filled in the first. Use Import to add them all. Check the fields, then add.`
+        : 'Filled in from your text. Check the fields, then add the job.', ...notices].join(' '));
+    } catch (error) {
+      setFillErr(/GROQ_API_KEY|Groq/i.test(error.message || '')
+        ? 'The AI isn’t set up yet: the server needs a GROQ_API_KEY.'
+        : error.message || 'Could not read that text.');
+    } finally {
+      setFilling(false);
+    }
+  }
 
   async function handleAnalyze() {
     setAnalyzing(true);
@@ -98,8 +138,14 @@ export default function JobModal({ open, onClose, job, hasPrev, hasNext, onPrev,
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.company.trim() || !form.role.trim()) {
-      setErr('Company and role are required.');
+      // A new lead also needs a link or email: say everything that is missing in one message.
+      setErr(!isEdit && form.status === 'lead' ? leadError(form) : 'Company and role are required.');
       return;
+    }
+    if (!isEdit) {
+      // New leads must have a company, a role and a link or email before they are added.
+      const problem = leadError(form) || jobUrlError(form);
+      if (problem) { setErr(problem); return; }
     }
     setSaving(true);
     setErr('');
@@ -154,7 +200,7 @@ export default function JobModal({ open, onClose, job, hasPrev, hasNext, onPrev,
 
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? 'Edit job' : 'Add a job'} maxWidth="max-w-xl">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {(hasPrev || hasNext) && (
           <div className="flex items-center justify-between -mt-1">
             <button
@@ -177,6 +223,23 @@ export default function JobModal({ open, onClose, job, hasPrev, hasNext, onPrev,
             >
               Next <ChevronRight size={14} />
             </button>
+          </div>
+        )}
+        {!isEdit && (
+          <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--border)', background: 'color-mix(in oklab, var(--brand) 6%, var(--surface))' }}>
+            <label htmlFor="job-paste" className="text-xs font-medium flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+              <Sparkles size={13} style={{ color: 'var(--brand)' }} /> Paste a job posting, an email, or just a link — the AI fills the form
+            </label>
+            <textarea id="job-paste" value={paste} onChange={(e) => setPaste(e.target.value)} rows={3}
+              placeholder="Paste anything here, then press Auto-fill…" className={`${inputClass()} resize-y`} style={inputStyle()} />
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={handleAutoFill} disabled={!paste.trim() || filling}
+                className="text-sm rounded-lg px-3 py-1.5 font-medium text-white flex items-center gap-1.5 disabled:opacity-50" style={{ background: 'var(--brand)' }}>
+                {filling ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} {filling ? 'Reading…' : 'Auto-fill'}
+              </button>
+              {fillMsg && <p role="status" className="text-xs" style={{ color: 'var(--text-secondary)' }}>{fillMsg}</p>}
+              {fillErr && <p role="alert" className="text-xs" style={{ color: 'var(--red)' }}>{fillErr}</p>}
+            </div>
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -216,15 +279,36 @@ export default function JobModal({ open, onClose, job, hasPrev, hasNext, onPrev,
           </Field>
         )}
 
-        <Field label="Contact (job link or recruiter email)">
+        <Field label={!isEdit && isLead ? 'Contact (job link or recruiter email) *' : 'Contact (job link or recruiter email)'}>
           <input value={form.contact} onChange={set('contact')} className={inputClass()} style={inputStyle()} placeholder="https://… or name@company.com" />
         </Field>
 
-        <Field label="Source">
-          <select value={form.source} onChange={set('source')} className={inputClass()} style={inputStyle()}>
-            {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Source">
+            <select value={form.source} onChange={set('source')} className={inputClass()} style={inputStyle()}>
+              {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </Field>
+          <Field label="Job URL">
+            <input type="url" value={form.jobUrl || ''} onChange={set('jobUrl')} className={inputClass()} style={inputStyle()} placeholder="https://company.com/careers/123" />
+          </Field>
+        </div>
+
+        <Field label="Description">
+          <textarea value={form.description || ''} onChange={set('description')} rows={3} className={inputClass()} style={inputStyle()} placeholder="Paste the job description or the parts worth remembering" />
         </Field>
+
+        {isLead && (
+          <Field label="Visibility">
+            <select value={form.visibility || 'personal'} onChange={set('visibility')} className={inputClass()} style={inputStyle()}>
+              <option value="personal">Personal — only me</option>
+              <option value="peer">Peer — my accepted peers can see this lead</option>
+            </select>
+            <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+              Peers only see the lead itself. Your application status is never shared, and you can switch back to Personal any time.
+            </p>
+          </Field>
+        )}
 
         {!isLead && (
           <Field label="Notes / comments">
@@ -278,7 +362,7 @@ export default function JobModal({ open, onClose, job, hasPrev, hasNext, onPrev,
         )}
 
         {err && (
-          <div className="text-sm rounded-lg p-2.5" style={{ background: 'color-mix(in oklab, var(--status-rejected) 12%, var(--surface))', color: 'var(--status-rejected)' }}>
+          <div role="alert" className="text-sm rounded-lg p-2.5" style={{ background: 'color-mix(in oklab, var(--status-rejected) 12%, var(--surface))', color: 'var(--status-rejected)' }}>
             {err}
           </div>
         )}

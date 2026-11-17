@@ -6,8 +6,10 @@ function splitRows(text) {
   return text
     .replace(/\r\n/g, '\n')
     .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+    // Keep trailing tabs: they are empty cells. Trimming them turns a 12-column row that ends in blank
+    // cells into a short row, which is then mistaken for the 6-column sheet.
+    .map((l) => l.replace(/^[ ]+/, '').replace(/[ \r]+$/, ''))
+    .filter((l) => l.trim().length > 0);
 }
 
 function splitCols(line) {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { JobsProvider, useJobs } from './context/JobsContext';
 import { useTheme } from './lib/useTheme';
-import Setup from './components/Setup';
+import AuthScreen from './components/AuthScreen';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Board from './components/Board';
@@ -11,15 +11,32 @@ import JobModal from './components/JobModal';
 import ImportModal from './components/ImportModal';
 import AIAssistant from './components/AIAssistant';
 import NotesPanel from './components/NotesPanel';
-import GraphView from './components/GraphView';
+import PeersPanel from './components/PeersPanel';
+import TeamDashboard from './components/team/TeamDashboard';
+import TeamLeads from './components/team/TeamLeads';
+import TeamContacts from './components/team/TeamContacts';
+import TeamActivity from './components/team/TeamActivity';
+import TeamGuide from './components/team/TeamGuide';
+import ContactsPanel from './components/ContactsPanel';
+import Analytics from './components/Analytics';
+import MyLeads from './components/MyLeads';
+import TeamNotes from './components/team/TeamNotes';
+import { personalJobs } from './lib/personal';
 import Guide from './components/Guide';
+import ProfilePage from './components/ProfilePage';
+import { useIsProfileRoute } from './lib/profileRoute';
+import { useWorkspaceRoute } from './lib/useWorkspaceRoute';
 import { Loader2, Briefcase } from 'lucide-react';
+import LoadingSkeleton from './components/ui/LoadingSkeleton';
 
 function AppInner() {
-  const { configured, jobs, loading } = useJobs();
-  const { theme, toggle } = useTheme();
-  const [view, setView] = useState('dashboard');
-  const [search, setSearch] = useState('');
+  const { session, configured, jobs, loading } = useJobs();
+  // The Personal pages show only what lives in Personal: a lead moved to Team has left it.
+  const mine = useMemo(() => personalJobs(jobs), [jobs]);
+  const { theme } = useTheme();
+  // Two workspaces (Personal / Team); workspace + tab live in the URL hash (see useWorkspaceRoute).
+  const { workspace, view, setWorkspace, setView, go } = useWorkspaceRoute();
+  const onProfile = useIsProfileRoute();
   // listIds is the ordered set of job ids the modal was opened from (a
   // Board column, the Table's current sort, Dashboard's recent list) — kept
   // as ids rather than a frozen array of job objects so Prev/Next and the
@@ -28,6 +45,13 @@ function AppInner() {
   // moment the modal opened.
   const [jobModal, setJobModal] = useState({ open: false, job: null, listIds: null });
   const [importOpen, setImportOpen] = useState(false);
+  // Team quick actions ("Share Lead", "Connect Peer"…) open a page and then ask it to start that action.
+  const [teamIntent, setTeamIntent] = useState(null);
+  const clearIntent = useCallback(() => setTeamIntent(null), []);
+  const goTeam = useCallback((nextView, action = null) => {
+    setTeamIntent(action);
+    go('team', nextView);
+  }, [go]);
 
   // JobModal's onSubmit is an async handler that keeps running after the
   // component that captured it has moved on to a later render — reading
@@ -44,13 +68,6 @@ function AppInner() {
   }, []);
   const closeJobModal = useCallback(() => setJobModal({ open: false, job: null, listIds: null }), []);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return jobs;
-    return jobs.filter((j) =>
-      `${j.company} ${j.role} ${j.location}`.toLowerCase().includes(q)
-    );
-  }, [jobs, search]);
 
   // Re-derived from live `jobs` on every render (not stored as-is) so the
   // list a Prev/Next pair walks stays correct as items get edited or
@@ -90,40 +107,63 @@ function AppInner() {
     }
   }, [closeJobModal]);
 
-  if (!configured) return <Setup />;
+  if (session === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--page)' }}>
+        <Loader2 className="animate-spin" size={22} style={{ color: 'var(--text-muted)' }} />
+      </div>
+    );
+  }
+  if (!configured) return <AuthScreen />;
 
   return (
     <>
       <Layout
-        view={view}
+        workspace={workspace}
+        setWorkspace={setWorkspace}
+        view={onProfile ? '' : view}
         setView={setView}
-        search={search}
-        setSearch={setSearch}
-        onAdd={() => openJobModal()}
-        onImport={() => setImportOpen(true)}
-        theme={theme}
-        toggleTheme={toggle}
       >
-        {view === 'progress' ? (
+        {onProfile ? (
+          <ProfilePage onBack={() => setView(view)} />
+        ) : workspace === 'team' ? (
+          view === 'leads' ? (
+            <TeamLeads key="team-leads" intent={teamIntent} onIntentDone={clearIntent} onNavigate={goTeam} />
+          ) : view === 'contacts' ? (
+            <TeamContacts key="team-contacts" intent={teamIntent} onIntentDone={clearIntent} onNavigate={goTeam} />
+          ) : view === 'notes' ? (
+            <TeamNotes key="team-notes" intent={teamIntent} onIntentDone={clearIntent} onNavigate={goTeam} />
+          ) : view === 'peers' ? (
+            <PeersPanel intent={teamIntent} onIntentDone={clearIntent} />
+          ) : view === 'activity' ? (
+            <TeamActivity onNavigate={goTeam} />
+          ) : view === 'guide' ? (
+            <TeamGuide />
+          ) : (
+            <TeamDashboard onNavigate={goTeam} />
+          )
+        ) : view === 'progress' ? (
           <Progress />
         ) : view === 'notes' ? (
           <NotesPanel />
+        ) : view === 'leads' ? (
+          <MyLeads key="personal-leads" onOpen={openJobModal} onAdd={() => openJobModal()} onImport={() => setImportOpen(true)} />
+        ) : view === 'contacts' ? (
+          <ContactsPanel key="personal-contacts" mode="personal" />
         ) : view === 'graph' ? (
-          <GraphView theme={theme} onOpen={openJobModal} onOpenNotes={() => setView('notes')} />
+          <Analytics jobs={mine} theme={theme} onOpen={openJobModal} onOpenNotes={() => setView('notes')} />
         ) : view === 'guide' ? (
           <Guide />
         ) : loading && jobs.length === 0 ? (
-          <div className="flex items-center justify-center py-24" style={{ color: 'var(--text-muted)' }}>
-            <Loader2 size={20} className="animate-spin mr-2" /> Loading your jobs…
-          </div>
-        ) : jobs.length === 0 ? (
+          <div className="max-w-3xl mx-auto"><LoadingSkeleton rows={5} label="Loading your jobs" /></div>
+        ) : view === 'board' ? (
+          <Board jobs={mine} onOpen={openJobModal} onAdd={() => openJobModal()} />
+        ) : view === 'table' ? (
+          <TableView jobs={mine} onOpen={openJobModal} onAdd={() => openJobModal()} onImport={() => setImportOpen(true)} />
+        ) : mine.length === 0 ? (
           <EmptyState onAdd={() => openJobModal()} onImport={() => setImportOpen(true)} />
         ) : (
-          <>
-            {view === 'dashboard' && <Dashboard jobs={jobs} onOpen={openJobModal} />}
-            {view === 'board' && <Board jobs={filtered} onOpen={openJobModal} />}
-            {view === 'table' && <TableView jobs={filtered} onOpen={openJobModal} />}
-          </>
+          <Dashboard jobs={mine} onOpen={openJobModal} onAdd={() => openJobModal()} onImport={() => setImportOpen(true)} onNavigate={setView} />
         )}
       </Layout>
 
@@ -153,7 +193,7 @@ function EmptyState({ onAdd, onImport }) {
         <Briefcase size={24} style={{ color: 'var(--brand)' }} />
       </div>
       <p className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>No jobs yet</p>
-      <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>Add your first job, or import your existing list from Google Sheets.</p>
+      <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>Add your first job, or import your existing list.</p>
       <div className="flex items-center justify-center gap-2">
         <button onClick={onAdd} className="rounded-lg px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity" style={{ background: 'var(--brand)' }}>
           Add a job

@@ -1,197 +1,111 @@
-# Job Tracker — Setup
+# DevScale — Setup (Supabase)
 
-Your job data lives in a Google Sheet. This app talks to it through a small
-script that Google hosts for free (Google Apps Script). No database, no
-hosting bill, no separate backend to maintain. Editing the sheet by hand and
-using the app are fully two-way — either one updates the other.
+Data lives in Supabase Postgres, protected by Row Level Security. The browser talks to
+Supabase directly (anon key + your login). The AI assistant runs in a Supabase Edge
+Function so the Groq key never reaches the browser.
 
-## 1. Create the sheet
+## 1. Create the project and schema
+1. Create a project at [supabase.com](https://supabase.com).
+2. Apply every file in [`supabase/migrations/`](supabase/migrations/) in filename order
+   (SQL Editor, `supabase db push`, or the Supabase MCP). Together they create `jobs`, `leads`, `notes`,
+   `leetcode_problems`, `profiles` (peer codes), `peer_connections` and `contacts`, all with RLS, plus the
+   functions listed in [docs/api.md](docs/api.md).
+3. **Authentication.** People create their own account on the sign-in screen (**Create an account**). In the
+   Supabase dashboard:
+   - **Authentication → Sign In / Providers → Email:** keep "Allow new users to sign up" **on** and
+     "Confirm email" **on**. Set the minimum password length to 8 or more, and turn on leaked-password protection.
+   - **Authentication → URL Configuration:** set **Site URL** to your production URL, and add every address the app
+     is served from to **Redirect URLs** (for example `http://localhost:5173/**`, `http://127.0.0.1:5173/**`
+     and `https://your-app.vercel.app/**`). Confirmation and reset links only work for listed addresses.
+   - Supabase's built-in email sender is limited to a few emails per hour. For real use, add your own SMTP account
+     under **Authentication → SMTP Settings** (see [Emails](#9-emails)).
+   Every account automatically gets a unique peer code (visible on the Peers tab). You can still add a user
+   yourself under Authentication → Users → Add user.
 
-Use either of your existing spreadsheets, or create a new blank one at
-sheets.google.com. You don't need to create the "Jobs" tab yourself — the
-script creates it automatically the first time it runs.
+## 2. Frontend env
+Copy `client/.env.example` to `client/.env.local` and fill in the Project URL and the **anon** key
+(Project Settings → API). Never put the `service_role` key in a `VITE_*` variable.
+Set the same two variables in Vercel.
 
-## 2. Add the script
+## 3. AI assistant (Edge Function)
+```
+supabase link --project-ref <ref>
+supabase secrets set GROQ_API_KEY=<your groq key>
+supabase functions deploy ai
+```
 
-1. In your Google Sheet, click **Extensions → Apps Script**.
-2. Delete anything in the editor (`Code.gs`) and paste the entire contents of
-   [`apps-script/Code.gs`](apps-script/Code.gs) from this project.
-3. A `SECRET_TOKEN` constant is already filled in near the top of the file.
-   Change it to any random string of your own — just make sure it matches
-   what you enter in the app later (and never commit your real value).
-4. Click **Save** (Ctrl+S).
+## 4. Import existing Google Sheets data (one time)
+While the old Apps Script is still deployed:
+```
+cd client
+APPS_SCRIPT_URL=... APPS_SCRIPT_TOKEN=... SUPABASE_URL=... \
+SUPABASE_SERVICE_KEY=... IMPORT_USER_ID=<your auth user uuid> \
+node scripts/import-from-sheets.mjs --dry-run   # then again without --dry-run
+```
 
-## 3. Deploy as a Web App
+## 5. External lead scrapers
+Insert into `public.leads` using the service-role key and set `user_id` explicitly.
+Leads with `applied = false` show up in the app's Lead column.
 
-1. Click **Deploy → New deployment**.
-2. Click the gear icon next to "Select type" → choose **Web app**.
-3. Fill in:
-   - Description: `Job Tracker API`
-   - Execute as: **Me**
-   - Who has access: **Anyone**
-4. Click **Deploy**.
-5. Google will ask you to authorize the script — click **Authorize access**,
-   pick your account, click **Advanced → Go to Job Tracker (unsafe)** (this
-   warning appears because it's your own unpublished script, not because
-   anything is actually unsafe), then **Allow**.
-6. Copy the **Web app URL** it gives you — it looks like:
-   `https://script.google.com/macros/s/AKfycb.../exec`
+## 6. Peers, sharing and contacts
+- **Peers tab:** share your peer code, or enter someone else's, to connect. Only *accepted* peers can see anything
+  you mark **Peer**; removing a peer, or switching a lead/contact back to **Personal**, revokes access immediately.
+- **Leads:** each lead is Personal (default) or Peer. Peers can view a shared lead and import it as their *own* copy
+  (their own status and history). Application statuses are never shared.
+- **Contacts:** same Personal/Peer model. Peers see name, email, phone, company, designation and LinkedIn — not your
+  notes — and can save a copy but never edit or delete yours.
+- All access rules live in the database (RLS + `SECURITY DEFINER` functions), not in the UI. See [docs/api.md](docs/api.md).
 
-Keep this URL and the token — you'll paste both into the app's Setup screen
-the first time you open it.
+## 7. Abuse protection for open sign-up
+Anyone can register, so also set these in the Supabase dashboard (the app's own limits on peer requests are already in the database):
+- **Authentication → Attack Protection:** enable **CAPTCHA** (Turnstile or hCaptcha) and **leaked-password protection**. CAPTCHA also needs a small frontend change that is not built yet.
+- **Authentication → Sign In / Providers → Email:** minimum password length 8 or more.
+- **Authentication → Rate Limits:** review the sign-up and email limits (they are per IP).
 
-## 4. (Optional) Turn on the AI assistant
+## 8. Tests
+```
+cd client
+npm test                 # frontend (Vitest)
+npm run lint && npm run build
+supabase test db         # pgTAP database tests in supabase/tests/database (needs the Supabase CLI + Docker)
 
-The assistant is powered by [Groq](https://console.groq.com) — fast, and has
-a generous free tier. The key lives only in Apps Script's server-side
-storage, never in the browser.
+# Live end-to-end checks. They create throwaway users and delete them afterwards; the auth one sends no email.
+SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_KEY=... node scripts/e2e-sharing.mjs
+SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_KEY=... node scripts/e2e-auth.mjs
+```
+The service key is only for the end-to-end script and scrapers. Never commit it or put it in a `VITE_*` variable.
 
-1. Go to [console.groq.com/keys](https://console.groq.com/keys), sign in,
-   create an API key, copy it.
-2. Back in the Apps Script editor: **Project Settings** (gear icon, left
-   sidebar) → scroll to **Script Properties** → **Add script property**.
-   - Property: `GROQ_API_KEY`
-   - Value: the key you copied
-3. Save. No redeploy needed — script properties are read live.
+## 9. Emails
+Two separate things send mail:
 
-Skip this step if you don't want the assistant; the rest of the app works
-fine without it.
+**A. Confirmation and password-reset emails — sent by Supabase Auth through your SMTP account.**
+1. Pick a provider that gives you SMTP credentials. **Brevo** works without owning a domain (verify a single
+   sender address); **Resend** needs a verified domain; **Gmail** works with an app password but has low limits
+   and sends "from" your Gmail address.
+2. Dashboard → **Authentication → SMTP Settings**: enable custom SMTP and enter the host, port (465 or 587),
+   username, password and the sender name/address. Supabase's built-in sender is capped at **2 emails per hour**
+   for the whole project, and custom SMTP starts at **30 per hour** (raise it under Authentication → Rate Limits).
+3. Dashboard → **Authentication → Email Templates**: paste [`supabase/templates/confirmation.html`](supabase/templates/confirmation.html)
+   into *Confirm signup* and [`supabase/templates/recovery.html`](supabase/templates/recovery.html) into *Reset password*
+   (subjects: "Confirm your DevScale account" / "Reset your DevScale password").
 
-## 5. (Optional) Turn on Notes + the Supabase mirror
-
-Two extra features are backed by [Supabase](https://supabase.com) (a free hosted
-Postgres database): the standalone **Notes** tab (general strategy notes, not
-tied to one job), and a live mirror of your jobs in a real database — useful
-if you ever want to query or build on top of your data outside Google Sheets.
-Google Sheets stays the single source of truth either way; Supabase is only
-ever written *to*, never read *from* by the sheet or the app's own display.
-
-1. Go to [supabase.com](https://supabase.com), sign in, and create a new
-   project (the free tier is plenty).
-2. Open the **SQL Editor** and run:
-   ```sql
-   create table notes (
-     id uuid primary key default gen_random_uuid(),
-     content text not null,
-     created_at timestamptz not null default now(),
-     updated_at timestamptz not null default now()
-   );
-   alter table notes enable row level security;
-
-   create table jobs (
-     id text primary key,
-     company text,
-     role text,
-     status text,
-     date_applied text,
-     interview_status text,
-     contact text,
-     source text,
-     location text,
-     experience text,
-     posted_time text,
-     notes text,
-     created_at text,
-     updated_at text,
-     synced_at timestamptz
-   );
-   alter table jobs enable row level security;
+**B. Welcome email and new-sign-in alert — sent by the `notify` Edge Function.** These go through your provider's
+**web API** (not SMTP), because outbound SMTP from Edge Functions is not guaranteed by Supabase. Supported: `resend`, `brevo`.
+1. Generate a long random string for `NOTIFY_SECRET` (for example `openssl rand -hex 32`).
+2. Deploy and configure the function (needs the Supabase CLI):
    ```
-   Enabling row-level security with no policies means the tables are locked
-   down from the public `anon` key entirely — only the `service_role` key
-   (server-side only, see next step) can read or write them.
-3. In your Supabase project: **Project Settings → API**. Copy the **Project
-   URL** and the **`service_role`** secret key (not the `anon` key — the
-   `anon` key is meant to be public-safe, `service_role` is the one that
-   bypasses row-level security and must stay private).
-4. Back in the Apps Script editor: **Project Settings** → **Script
-   Properties** → **Add script property**, twice:
-   - `SUPABASE_URL` → your Project URL
-   - `SUPABASE_SERVICE_KEY` → the `service_role` key
-5. Save. No redeploy needed. Notes now works, and every add/edit/delete/import
-   made through the website mirrors into the `jobs` table automatically.
-6. *(Optional, for hand-typed sheet edits to reach Supabase quickly too)*: in
-   the Apps Script editor, click the **Triggers** icon (clock, left sidebar)
-   → **Add Trigger** → choose function `onTrackerEdit` → event source **From
-   spreadsheet** → event type **On edit** → **Save**. Without this, a manual
-   edit typed straight into the sheet still shows up correctly on the website
-   (via its normal polling) — it just won't reach the Supabase mirror until
-   the next time you add, edit, delete, or import something from the website.
-
-Skip this whole section if you don't want Notes or the Supabase mirror — the
-rest of the app works fine without it; the Notes tab will just show a message
-explaining it isn't set up.
-
-## 6. Run the app locally
-
-```
-cd client
-npm run dev -- --host
-```
-
-- On your laptop, open the `Local` URL it prints (e.g. `http://localhost:5173`).
-- On your phone (same Wi-Fi as your laptop), open the `Network` URL it prints
-  (e.g. `http://192.168.1.23:5173`).
-
-The first time you open it, paste in the Web App URL and token from step 3.
-They're saved in the browser (localStorage), so you only do this once per
-device/browser.
-
-## 7. Deploy to Vercel (access from anywhere, not just your Wi-Fi)
-
-The app is a static site — it talks straight to Google from the browser, so
-there's nothing to host except static files. Vercel's free tier is plenty.
-
-```
-npm install -g vercel     # one-time
-vercel login              # opens a browser to sign in — do this yourself
-cd client
-vercel --prod              # deploys client/ as-is, no server needed
-```
-
-Answer the first-run prompts (link to a new project is fine, defaults work —
-Vercel auto-detects Vite). You'll get a permanent `https://your-app.vercel.app`
-URL that works from any device, on or off your home Wi-Fi. Re-run
-`vercel --prod` from `client/` any time you want to push updates.
-
-The Setup screen (URL + token) is entered per-browser, so open the Vercel URL
-on your phone once and connect it there too.
-
-## 8. Import your existing applications (optional, one-time)
-
-Open your old spreadsheet, select your data rows (not the header), copy
-(Ctrl+C), then in Job Tracker go to **Import** and paste. It auto-detects
-which of your two old sheet formats you're pasting from:
-
-- `Company | Role | Date Applied | Status | Interview Status | Job Link/Mail`
-- `Company | Recruitment Email | Job Title | Experience | Location | Posted Time | LinkedIn Job URL | Careers Page URL | Email Source URL | Applied | ... | Posted Timestamp`
-
-After that, everything — adding, editing, moving stages, deleting — happens
-in the app and is written straight back to your Google Sheet. You never need
-to open Sheets manually again, but the data is always sitting there in plain
-rows if you ever want to look, and the **Notes** field on each job doubles as
-a free-text comment column — edit it in the app or type straight into the
-sheet's `notes` column. The AI assistant reads it too.
-
-## Two-way sync, in plain terms
-
-- App → Sheet: instant. Every add/edit/delete/move writes straight to the row.
-- Sheet → App: the app polls every 10 seconds while the tab is open and
-  visible (backing off to every 30 seconds if the tracker starts reporting
-  errors, e.g. under heavy concurrent use), and refreshes immediately the
-  moment you switch back to it. Type a new row by hand, or edit a
-  `status`/`notes` cell directly — it'll show up in the app within a few
-  seconds, and gets a proper `id` assigned automatically the next time it's
-  read.
-- App/Sheet → Supabase: if you completed step 5, every add/edit/delete/import
-  made through the website also mirrors into Supabase's `jobs` table right
-  after the sheet write. A manual sheet edit reaches Supabase immediately too
-  if you installed the `onTrackerEdit` trigger, or on the next website-driven
-  change otherwise. Supabase never writes back to the sheet or the app — it's
-  a one-way mirror, which is what keeps this safe from sync loops.
-
-## Redeploying after you edit Code.gs
-
-If you ever change `apps-script/Code.gs`, paste the new version into the
-Apps Script editor, then **Deploy → Manage deployments → edit (pencil) →
-New version → Deploy**. The URL stays the same.
+   supabase secrets set NOTIFY_SECRET=<the random string> EMAIL_PROVIDER=brevo EMAIL_API_KEY=<provider API key> \
+     EMAIL_FROM="DevScale <hello@yourdomain.com>" APP_URL=https://your-app.vercel.app
+   supabase functions deploy notify --no-verify-jwt
+   ```
+3. Apply the migration [`20261116000600_notifications.sql`](supabase/migrations/20261116000600_notifications.sql). It installs
+   `pg_net` and the triggers, and **does nothing until step 4**.
+4. In the SQL Editor, store the two secrets the triggers use (same random string as `NOTIFY_SECRET`):
+   ```sql
+   select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/notify', 'notify_url');
+   select vault.create_secret('<the random string>', 'notify_secret');
+   ```
+- A user gets one welcome email, sent when their email is confirmed. A sign-in alert is sent on a new sign-in, at most
+  once per 30 minutes, and not during the first 5 minutes of a new account. To turn emails off, delete the two Vault secrets.
+- Emails to reserved test domains (`example.com`, `*.test`, `*.invalid`, `localhost`) are skipped.
+- Email problems never block signing up or signing in: each trigger catches its own errors.

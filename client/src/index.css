@@ -3,59 +3,71 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  color-scheme: light;
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --surface-2: #ffffff;
-  --border: rgba(11, 11, 11, 0.10);
-  --border-strong: rgba(11, 11, 11, 0.16);
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #898781;
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
+  color-scheme: dark;
+  /* DevScale dark workspace palette (single theme). */
+  --page: #0b0e14;
+  --header: #111722;
+  --surface: #171d28;
+  --surface-2: #202838;
+  --border: #2a3342;
+  --border-strong: #3a4558;
+  --text-primary: #f1f3f8;
+  --text-secondary: #9299a8;
+  --text-muted: #7b8396;
+  --grid: #232b3a;
+  --axis: #323c4e;
 
-  /* DevScale brand blue + navy, sampled directly from the logo lockup. */
-  --brand: #0148b5;
-  --brand-strong: #001b4d;
+  --brand: #477eff;
+  --brand-strong: #8aacff;
+  --purple: #9b7cff;
+  --green: #27c995;
+  --amber: #f3bb61;
+  --red: #f16c78;
 
-  --status-lead: #898781;
-  --status-applied: #0148b5;
-  --status-interviewing: #c98500;
-  --status-offer: #0ca30c;
-  --status-rejected: #d03b3b;
+  /* Pipeline stages share one colour per stage on every page. */
+  --status-lead: #477eff;
+  --status-applied: #27c995;
+  --status-interviewing: #9b7cff;
+  --status-offer: #f3bb61;
+  --status-rejected: #f16c78;
 
-  --shadow-sm: 0 1px 2px rgba(11, 11, 11, 0.06);
-  --shadow-md: 0 4px 16px rgba(11, 11, 11, 0.08);
-  --shadow-lg: 0 12px 32px rgba(11, 11, 11, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
-.dark {
-  color-scheme: dark;
-  --page: #0d0d0d;
-  --surface: #1a1a19;
-  --surface-2: #202020;
-  --border: rgba(255, 255, 255, 0.10);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted: #898781;
-  --grid: #2c2c2a;
-  --axis: #383835;
+/* Light theme: the same tokens, re-chosen for a white page. Accent colours are deeper than the dark
+   ones so text on tinted badges stays readable (contrast checked: >= 4.6:1 on their own tints). */
+:root.light {
+  color-scheme: light;
+  --page: #f3f5f9;
+  --header: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #eef1f6;
+  --border: #d8dde7;
+  --border-strong: #bcc5d5;
+  --text-primary: #111827;
+  --text-secondary: #475467;
+  --text-muted: #5b6578;
+  --grid: #e3e8f0;
+  --axis: #c4ccda;
 
-  /* Same brand hue family, brightened for legibility on a near-black page. */
-  --brand: #4c7eff;
-  --brand-strong: #8aacff;
+  --brand: #1f4fc4;
+  --brand-strong: #16399a;
+  --purple: #5b3cc8;
+  --green: #096247;
+  --amber: #8a5200;
+  --red: #a82639;
 
-  --status-lead: #a8a6a0;
-  --status-applied: #4c7eff;
-  --status-interviewing: #fab219;
-  --status-offer: #0ca30c;
-  --status-rejected: #e66767;
+  --status-lead: #1f4fc4;
+  --status-applied: #096247;
+  --status-interviewing: #5b3cc8;
+  --status-offer: #8a5200;
+  --status-rejected: #a82639;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 6px 18px rgba(16, 24, 40, 0.10);
+  --shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.16);
 }
 
 * {
@@ -125,3 +137,18 @@ body {
     overflow-x: auto;
   }
 }
+
+@keyframes sheetIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.skeleton { animation: skeletonPulse 1.4s ease-in-out infinite; background: var(--surface-2); border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* Keep content clear of the fixed mobile bottom navigation. */
+.has-bottom-nav { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom)); }

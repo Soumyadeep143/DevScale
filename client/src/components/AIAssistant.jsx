@@ -46,7 +46,7 @@ export default function AIAssistant() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="fixed z-40 bottom-5 right-5 w-13 h-13 rounded-full flex items-center justify-center text-white transition-transform hover:scale-105"
+        className="fixed z-40 bottom-20 md:bottom-5 right-5 w-13 h-13 rounded-full flex items-center justify-center text-white transition-transform hover:scale-105"
         style={{ background: 'var(--brand)', boxShadow: 'var(--shadow-lg)', width: 52, height: 52 }}
         aria-label="Open AI assistant"
       >

@@ -2,18 +2,18 @@
 
 # 🚀 DevScale — Job Search Command Center
 
-**A full-featured, zero-cost job-search management platform that lives entirely in your Google Sheets — no database, no backend server overhead.**
+**Track your job search privately, and share leads and contacts with the peers you trust.**
 
 [![React](https://img.shields.io/badge/React-19-149ECA?style=for-the-badge&logo=react&logoColor=white)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Google Apps Script](https://img.shields.io/badge/Backend-Google_Apps_Script-4285F4?style=for-the-badge&logo=googlesheets&logoColor=white)](https://developers.google.com/apps-script)
+[![Supabase](https://img.shields.io/badge/Backend-Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Groq AI](https://img.shields.io/badge/AI-Groq_Llama_3.3-F55036?style=for-the-badge&logo=groq&logoColor=white)](https://groq.com/)
 [![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/)
 
 ---
 
-[**🔗 Live Demo**](https://devscale-app.vercel.app) &nbsp;•&nbsp; [**📖 Setup Guide**](SETUP.md) &nbsp;•&nbsp; [**🏗️ Architecture**](#-system-architecture) &nbsp;•&nbsp; [**⚡ Key Features**](#-key-features)
+[**🔗 Live Demo**](https://devscale-app.vercel.app) &nbsp;•&nbsp; [**📖 Setup Guide**](SETUP.md) &nbsp;•&nbsp; [**🏗️ Architecture**](#-system-architecture) &nbsp;•&nbsp; [**⚡ Key Features**](#-key-features) &nbsp;•&nbsp; [**🔌 API reference**](docs/api.md)
 
 </div>
 
@@ -21,86 +21,66 @@
 
 ## 📌 Overview
 
-**DevScale** transforms plain Google Sheets into an enterprise-grade job search command center. It unifies lead tracking, application lifecycles, interview stages, offer evaluations, and technical interview preparation (LeetCode) into a sleek, responsive web interface.
+**DevScale** unifies lead tracking, application stages, interview prep (LeetCode), notes and contacts in one responsive web app. It has two workspaces:
 
-Instead of paying recurring database fees or setting up complex backend infrastructure, **DevScale uses Google Sheets as a high-reliability, zero-maintenance database** powered by a serverless Google Apps Script API gateway.
+- **Personal** — your dashboard, leads, contacts, Kanban board, table, graph, LeetCode plan and notes. Private to you.
+- **Team** — leads and contacts you share with **accepted peers**, and the peers themselves. Sharing is opt-in per item, and your application status is never shared.
+
+Everything is stored in **Supabase (Postgres)**. The browser talks to Supabase directly; **all access rules are enforced in the database** (Row Level Security and `SECURITY DEFINER` functions), not in the UI.
 
 ---
 
 ## 🏗️ System Architecture
 
-### 1. High-Level System Architecture
-
 ```mermaid
 flowchart TB
-    subgraph ClientLayer [" Client Layer (Browser SPA) "]
-        direction TB
-        ReactApp["React 19 + Vite Frontend"]
-        Dashboard["📊 Analytics Dashboard (Recharts)"]
-        Kanban["🗂️ Kanban Board View"]
-        TableView["📋 Spreadsheet Table View"]
-        LeetCode["✅ LeetCode 5-Week Prep Tracker"]
-        AIChat["🤖 Groq-Powered AI Assistant"]
+    subgraph Client [" Browser (React 19 SPA on Vercel) "]
+        UI["Personal workspace · Team workspace"]
+        Auth["Sign up / sign in / reset password"]
     end
 
-    subgraph ServerlessLayer [" Serverless API Gateway (Google Cloud) "]
-        GAS["Google Apps Script Web App (Code.gs)"]
-        AuthMiddleware["🔑 Secret Token Authentication"]
-        APIRouter["🔀 Action Router (doGet / doPost)"]
+    subgraph Supabase [" Supabase "]
+        AuthSvc["Auth (email + password, confirmation emails)"]
+        API["PostgREST API"]
+        DB[("Postgres + Row Level Security")]
+        Fn1["Edge Function: ai"]
+        Fn2["Edge Function: notify (optional)"]
     end
 
-    subgraph ExternalServices [" AI Integration "]
-        Groq["⚡ Groq LLM API\n(Llama 3.3 70B)"]
-    end
+    Groq["Groq LLM API (Llama 3.3 70B)"]
+    Mail["Email provider (SMTP / HTTPS API)"]
 
-    subgraph DataLayer [" Database Layer (Google Workspace) "]
-        TrackingSheet[("📄 Applications Sheet\n(Source of Truth)")]
-        LeadsSheet[("📄 Job Leads Sheet\n(Sourced Postings)")]
-        LeetCodeSheet[("📄 LeetCode Sheet\n(Weekly Prep Plan)")]
-    end
-
-    %% Component Relationships
-    ReactApp --> Dashboard & Kanban & TableView & LeetCode & AIChat
-    ReactApp -->|HTTPS / JSON API + Secret Token| AuthMiddleware
-    AuthMiddleware --> APIRouter
-    APIRouter -->|Google Sheets API| TrackingSheet
-    APIRouter -->|Google Sheets API| LeadsSheet
-    APIRouter -->|Google Sheets API| LeetCodeSheet
-    APIRouter -->|Pipeline Context + User Query| Groq
+    UI -->|anon key + user session| API
+    Auth --> AuthSvc
+    API --> DB
+    UI -->|user session| Fn1
+    Fn1 -->|your rows only (RLS)| DB
+    Fn1 --> Groq
+    AuthSvc -->|confirm / reset| Mail
+    DB -->|welcome / sign-in alert triggers| Fn2
+    Fn2 --> Mail
 ```
 
-### 2. Two-Way Synchronization & AI Sequence Flow
+### Sharing between peers
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as 👤 Developer
-    participant App as 📱 React Frontend (Vercel)
-    participant API as ⚡ Apps Script Web App
-    participant Sheets as 📊 Google Sheets (3 Workbooks)
-    participant Groq as 🤖 Groq AI (Llama 3.3)
+    actor A as Alice
+    actor B as Bob
+    participant DB as Postgres (RLS + functions)
 
-    rect rgb(240, 248, 255)
-    note over User, Sheets: Application Update & Real-Time Sync Flow
-    User->>App: Drag card to "Interviewing" stage or add new job
-    App->>API: POST /exec (Action: updateJob, Token, Payload)
-    API->>Sheets: Find row ID & write column data
-    Sheets-->>API: Row updated successfully
-    API-->>App: Return updated record JSON
-    App-->>User: Optimistic UI state confirmation
-    end
-
-    rect rgb(255, 245, 240)
-    note over User, Groq: Real-Time Context-Aware AI Assistance
-    User->>App: Ask AI: "Summarize my active interview prep and pending responses"
-    App->>API: POST /exec (Action: queryAI, Prompt, History)
-    API->>Sheets: Read active Applications + Notes + LeetCode progress
-    Sheets-->>API: Full job search context
-    API->>Groq: Send System Context + Applications Data + User Prompt
-    Groq-->>API: Generated Insights & Structured Response
-    API-->>App: Return AI Markdown Response
-    App-->>User: Display rich formatted AI response in Chat UI
-    end
+    B->>DB: connect_with_peer(Alice's peer code)
+    DB-->>A: pending request (list_peers)
+    A->>DB: respond_to_request(accept)
+    A->>DB: mark a lead "Peer" (plain update on her own row)
+    B->>DB: shared_leads_with_me()
+    DB-->>B: Alice's peer leads (never her application status)
+    B->>DB: import_shared_lead(lead, "applied")
+    Note over DB: A new row in Bob's own jobs — Bob's status is independent
+    A->>DB: remove_peer / make the lead Personal
+    B->>DB: shared_leads_with_me()
+    DB-->>B: nothing — access ends immediately; Bob's copy stays his
 ```
 
 ---
@@ -131,7 +111,7 @@ sequenceDiagram
     </td>
     <td width="50%" align="center">
       <b>✅ LeetCode Prep Tracker</b><br/>
-      <i>5-week structured interview prep plan synced live to Sheets</i>
+      <i>5-week structured interview prep plan with per-problem progress</i>
       <br/><br/>
       <img src="docs/screenshots/leetcode.jpg" alt="LeetCode View" width="100%" />
     </td>
@@ -142,84 +122,74 @@ sequenceDiagram
 
 ## ✨ Key Features
 
-- 📊 **Executive Dashboard**: Live pipeline statistics, conversion ratios, applications-over-time trend chart, and stage distribution charts powered by Recharts.
-- 🗂️ **Kanban Pipeline Board**: Drag-free card-based workflow tracking applications across `Lead`, `Applied`, `Interviewing`, and `Offer` stages.
-- 📋 **Spreadsheet Data Table**: Powerful tabular view with multi-field search, status filtering, column sorting, and inline editing.
-- 🤖 **Context-Aware AI Assistant**: Native integration with **Groq (Llama 3.3 70B)**. The AI analyzes your entire job search pipeline and notes to answer complex questions (e.g., *"How many jobs have I applied to today?"* or *"Where am I failing, and what's my strategy?"*).
-- 🔍 **AI Rejection Analysis**: Paste a rejection email into a job's notes, click Analyze — the AI states the likely reason and one concrete next step, and only saves it to that job's notes if you confirm.
-- 🗒️ **Notes**: A standalone strategy log, separate from any one job, backed by Supabase — the AI assistant reads it too.
-- 🕸️ **Connections graph**: An interactive, Obsidian-style node graph of how your jobs, companies, stages, and notes relate to each other.
-- 💡 **LeetCode Interview Prep Planner**: Built-in 5-week study plan trackable by problem status, difficulty, and topic, synchronized directly with a dedicated Google Sheet.
-- 🔄 **Real-Time Synchronization across Website, Sheets, and Supabase**:
-  - **App ➔ Sheets**: Edits write back to Google Sheets instantly via API calls.
-  - **Sheets ➔ App**: Automatic background polling (10s, backing off under load) + instant refetch on window focus.
-  - **App/Sheets ➔ Supabase**: Every write mirrors into a Supabase `jobs` table — a one-way mirror (never written back), so there's no sync-loop risk.
-- 📥 **Smart Bulk Importer**: Auto-detects and parses raw spreadsheet copy-pastes into structured records, with an in-app format guide and an explicit format picker if auto-detect guesses wrong.
-- 📖 **In-app Guide**: A built-in walkthrough of the whole workflow, reachable from the nav — not just docs in the repo.
-- 📱 **Mobile & Desktop Responsive**: Clean UI designed with Tailwind CSS for seamless use on desktop monitors and mobile devices.
-- 🌗 **Light / Dark Mode**: Full theme customization to suit your preference.
+- 🔐 **Accounts**: sign up with email confirmation, sign in, forgot / reset password, sign out. Wrong-password and unknown-email look identical, and a reset ends every other session.
+- 📊 **Executive Dashboard**: pipeline statistics, conversion ratios, applications-over-time and stage charts (Recharts).
+- 🗂️ **Kanban board & 📋 table**: Lead → Applied → Interviewing → Offer / Rejected, with search, sorting and inline editing.
+- 🧭 **Personal / Team workspaces**: a header switch; each workspace remembers its own last tab.
+- 🤝 **Peers**: every account gets a permanent peer code (`PEER-XXXXXX`). Send, accept, reject, cancel and remove connections; wrong-code guesses and request spam are rate-limited.
+- 📨 **Lead sharing**: leads are **Personal** (default) or **Peer**. Peers can view a shared lead and **import it as their own copy** — their own status and history. Making it Personal or removing the peer ends access immediately.
+- 👥 **Contacts**: name, email, phone, company, designation, LinkedIn, notes. Personal or Peer (peers never see your notes), search, filter, **paste-import** from a spreadsheet, and "save to my contacts".
+- 🤖 **AI assistant** *(deploy the `ai` Edge Function — see SETUP)*: Groq (Llama 3.3 70B) answers questions about *your* pipeline and notes, and analyses rejection emails.
+- 🗒️ **Notes**, 🕸️ **connections graph**, 💡 **LeetCode planner**, 📥 **smart bulk importer** (jobs and contacts), 📖 **in-app guide**.
+- ✉️ **Emails**: confirmation and reset through your SMTP account; optional welcome and new-sign-in emails via the `notify` Edge Function.
+- 📱 **Responsive** with 🌗 **light / dark** themes.
 
 ---
 
 ## 🛠️ Technology Stack
 
-| Layer | Technology / Tool | Description & Purpose |
+| Layer | Technology | Purpose |
 | :--- | :--- | :--- |
-| **Frontend Framework** | **React 19** | Ultra-responsive component UI architecture |
-| **Build System** | **Vite 8** | Next-generation fast HMR bundler |
-| **Styling & Design** | **Tailwind CSS v4** | Modern, utility-first UI styling with responsive design |
-| **Data Visualization** | **Recharts** | Interactive charts for pipeline analytics and application trends |
-| **Icons** | **Lucide React** | Clean, consistent icon set |
-| **API Gateway** | **Google Apps Script** | Serverless `doGet`/`doPost` JSON endpoint hosted on Google Cloud |
-| **Database Storage** | **Google Sheets** | 3 relational-style Google Workbooks (Applications, Leads, LeetCode) — the source of truth |
-| **Mirror Database** | **Supabase (Postgres)** | One-way mirror of jobs, plus the standalone Notes table — written to, never read from, by the sheet or app |
-| **AI LLM Engine** | **Groq (Llama 3.3 70B)** | High-speed inference engine for pipeline reasoning & chat |
-| **Hosting & CD** | **Vercel** | Edge-network global deployment for static assets |
+| **Frontend** | React 19, Vite 8, Tailwind CSS v4 | SPA, styling, Recharts, Lucide icons |
+| **Auth** | Supabase Auth | Email + password, email confirmation, password reset |
+| **Database** | Supabase Postgres | Row Level Security on every table; access rules in `SECURITY DEFINER` functions |
+| **Edge Functions** | Deno (Supabase) | `ai` (Groq gateway), `notify` (welcome / sign-in emails) |
+| **AI** | Groq (Llama 3.3 70B) | Pipeline reasoning and chat |
+| **Email** | Your SMTP account; Resend or Brevo web API | Auth emails; welcome / alert emails |
+| **Testing** | Vitest + Testing Library, pgTAP, Node end-to-end scripts | See [Testing](#-testing) |
+| **Hosting** | Vercel | Static frontend |
 
 ---
 
-## 💡 Why DevScale over Traditional SaaS / DBs?
-
-1. **Zero Database Maintenance & Hosting Cost**: No Postgres/MongoDB fees, no connection pools, no server provisioning. Google Workspace provides all storage infrastructure for free.
-2. **Complete Data Ownership**: Your job application data, salaries, and interview notes remain strictly inside your private Google Drive.
-3. **Dual Interfaces**: Edit your data through DevScale's modern React UI or edit raw cells directly in Google Sheets when working on bulk edits or offline tasks — both interfaces remain synced in real time.
-4. **Zero Schema Rewriting**: DevScale maintains your native spreadsheet dropdown options, formulas, and formatting without corrupting raw data.
-
----
-
-## ⚡ Quick Start & Setup Overview
-
-### 1. Local Development Setup
+## ⚡ Quick Start
 
 ```bash
-# Clone the repository
 git clone https://github.com/Soumyadeep143/DevScale.git
 cd DevScale/client
-
-# Install frontend dependencies
 npm install
-
-# Configure environment variables
-cp .env.example .env.local
-
-# Start the Vite development server
+cp .env.example .env.local   # fill in your Supabase URL and anon key
 npm run dev
 ```
 
-### 2. Backend & Sheets Setup
-
-For complete, step-by-step instructions on deploying the Google Apps Script Web App, configuring the `GROQ_API_KEY`, and deploying to Vercel, please refer to the comprehensive guide:
+The database, authentication settings, email and the AI function need a Supabase project:
 
 👉 [**Read the Full Setup Guide (SETUP.md)**](SETUP.md)
 
 ---
 
-## 🔒 Security & Privacy Architecture
+## 🔒 Security Model
 
-- **No Public Database**: All data operations pass strictly through your personal Google Apps Script deployment.
-- **Token Security**: API access is protected via a custom `SECRET_TOKEN` header verified before executing any sheet mutation.
-- **Client-Side Storage**: Web App URLs and auth tokens are persisted locally in `localStorage` on your client browser.
-- **Server-Side AI Keys**: The Groq API key is stored securely within Apps Script `ScriptProperties` on Google servers, never exposed to the client bundle.
+- **Access control lives in the database.** Every table has Row Level Security; peers never read another user's rows directly. Shared data is reachable only through functions that re-check the live peer relationship and visibility on every call, so revocation is immediate. The UI hiding a tab is never the protection.
+- **The browser holds only the anon key and the user's session.** Owner ids are never accepted from the client — the database derives them from the session.
+- **No anonymous access.** The signed-out role has no table privileges, and no function but a Supabase-managed one is executable by it.
+- **Abuse limits for open sign-up.** 10 wrong peer codes per hour, 20 new requests per hour, 10 requests waiting at once, a 24-hour wait after being declined, and bounded display names.
+- **Server-side secrets.** Groq and email-provider keys are Edge Function secrets, never in the client bundle. The service-role key is only for scripts and scrapers — never put it in a `VITE_*` variable.
+- **Email.** Subjects are static and all dynamic values are escaped; recipients come from the auth database, not the request.
+
+---
+
+## 🧪 Testing
+
+```bash
+cd client
+npm test                 # Vitest: UI, data layer, Edge Function logic, email templates
+npm run lint && npm run build
+supabase test db         # pgTAP: RLS, sharing, rate limits, privileges (needs Supabase CLI + Docker)
+
+# Live end-to-end checks — create throwaway users and delete them afterwards
+SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_KEY=... node scripts/e2e-sharing.mjs
+SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_KEY=... node scripts/e2e-auth.mjs   # sends no email
+```
 
 ---
 
