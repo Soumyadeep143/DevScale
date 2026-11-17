@@ -1,0 +1,20 @@
+{
+  "name": "devscale-ai-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Small server for DevScale's AI job reading: keeps the Groq key off the browser and answers CORS only for your app.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node --env-file=.env src/index.js",
+    "dev": "node --env-file=.env --watch src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.3.0",
+    "jose": "^6.2.17"
+  }
+}

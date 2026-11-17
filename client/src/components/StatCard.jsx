@@ -1,16 +1,24 @@
-export default function StatCard({ label, value, sub, color, icon: Icon }) {
+// KPI tile tinted with its accent colour.
+export default function StatCard({ label, value, sub, color = 'var(--brand)', icon: Icon }) {
   return (
-    <div className="rounded-xl border p-4" style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{label}</span>
+    <div className="rounded-2xl border p-4 relative overflow-hidden"
+      style={{
+        background: `linear-gradient(135deg, color-mix(in oklab, ${color} 20%, var(--surface)) 0%, var(--surface) 78%)`,
+        borderColor: `color-mix(in oklab, ${color} 28%, var(--border))`,
+        boxShadow: 'var(--shadow-sm)',
+      }}>
+      <div className="flex items-center gap-3">
         {Icon && (
-          <span className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: `color-mix(in oklab, ${color || 'var(--brand)'} 16%, var(--surface))` }}>
-            <Icon size={13} style={{ color: color || 'var(--brand)' }} />
+          <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `color-mix(in oklab, ${color} 24%, var(--surface-2))` }}>
+            <Icon size={18} style={{ color }} />
           </span>
         )}
+        <div className="min-w-0">
+          <p className="text-2xl font-semibold tabular-nums leading-none" style={{ color: 'var(--text-primary)' }}>{value}</p>
+          <p className="text-xs mt-1.5 truncate" style={{ color: 'var(--text-secondary)' }}>{label}</p>
+        </div>
       </div>
-      <p className="text-2xl font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{value}</p>
-      {sub && <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{sub}</p>}
+      {sub && <p className="text-[11px] mt-3" style={{ color: 'var(--text-muted)' }}>{sub}</p>}
     </div>
   );
 }

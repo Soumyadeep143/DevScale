@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Share2, X } from 'lucide-react';
 import { useJobs } from '../context/JobsContext';
 import { fetchNotes } from '../lib/api';
+import { noteVisibility } from '../lib/noteText';
 
 const PALETTE = {
   light: {
@@ -134,7 +135,7 @@ export default function GraphView({ theme, onOpen, onOpenNotes }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetchNotes().then((data) => { if (!cancelled) setNotes(data); }).catch(() => {});
+    fetchNotes().then((data) => { if (!cancelled) setNotes(data.filter((n) => noteVisibility(n) === 'personal')); }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
 

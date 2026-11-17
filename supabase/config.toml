@@ -3,8 +3,23 @@
 project_id = "devscale"
 
 [auth]
-# Invite-only: accounts are created from the dashboard, never self-registered.
-enable_signup = false
+# People create their own accounts; email must be confirmed before they can sign in.
+enable_signup = true
+
+[auth.email]
+enable_confirmations = true
 
 [functions.ai]
 verify_jwt = true
+
+[functions.notify]
+# Called by database triggers with a shared secret (x-notify-secret), not by signed-in users.
+verify_jwt = false
+
+[auth.email.template.confirmation]
+subject = "Confirm your DevScale account"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your DevScale password"
+content_path = "./supabase/templates/recovery.html"

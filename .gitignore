@@ -8,10 +8,47 @@ dist-ssr/
 # Vercel
 .vercel/
 
-# Env files
+# Env files: every variant holds secrets (Clerk secret key, Groq key, Supabase keys). Only the
+# *.example templates, which contain no real values, are committed.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.local
+server/.env
+client/.env.local
+
+# Keys, certificates and service accounts
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+service-account*.json
+credentials*.json
+client_secret*.json
+secrets/
+.secrets/
+
+# Personal data and database exports (password hashes, users, backups, spreadsheet exports)
+users.json
+*-users.json
+auth-users*.json
+*.dump
+*.backup
+*.sql.gz
+backup_*.sql
+*backup*.sql
+sheet-data*.json
+sheets-export*
+
+# Local tool config and caches (can hold project ids or tokens)
+.mcp.json
+.claude/settings.local.json
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+supabase/.env.*
+.supabase/
 
 # Logs
 logs
@@ -44,3 +81,84 @@ docs/plan.md
 docs/agent.md
 docs/roadmap.md
 docs/outcome.md
+
+# Supabase migrations and database tests (kept local)
+supabase/migrations/
+supabase/tests/
+
+# ---- Generated, cached and temporary files (nothing here is source; all of it can be rebuilt) ----
+# Dependencies, at any depth (client/, server/)
+**/node_modules/
+.pnp
+.pnp.js
+.yarn/
+.npm/
+.pnpm-store/
+
+# Build output
+build/
+out/
+.next/
+.nuxt/
+.turbo/
+**/dist/
+**/dist-ssr/
+*.tsbuildinfo
+
+# Caches
+.cache/
+.parcel-cache/
+.vite/
+.eslintcache
+.stylelintcache
+.oxlintcache
+.rpt2_cache/
+.node_repl_history
+
+# Test and coverage output
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+junit.xml
+*.lcov
+
+# Temporary and backup files
+tmp/
+temp/
+scratch/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*~
+.#*
+*.pid
+*.seed
+*.pid.lock
+
+# Archives and downloads
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Editor and OS extras
+*.code-workspace
+.history/
+.project
+.classpath
+.settings/
+.fleet/
+*.iml
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+$RECYCLE.BIN/
