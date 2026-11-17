@@ -1,12 +1,16 @@
-# Render blueprint for the DevScale AI server. Secrets are NOT stored here: set them in the Render dashboard.
+# Render blueprint for the DevScale AI server. Secrets are NOT stored here: Render asks for the three
+# marked sync: false when the blueprint is created.
 services:
   - type: web
     name: devscale-ai-server
     runtime: node
-    rootDir: server
-    buildCommand: npm install
-    startCommand: npm start
+    plan: free
+    # The server imports shared code from ../supabase/functions/ai, so it builds from the repo root
+    # (no rootDir) and moves into server/ itself.
+    buildCommand: cd server && npm ci
+    startCommand: cd server && npm start   # reads Render's environment variables; a local .env is optional
     healthCheckPath: /health
+    autoDeploy: true
     envVars:
       - key: NODE_VERSION
         value: 22.18.0
@@ -14,5 +18,8 @@ services:
         sync: false
       - key: CLERK_PUBLISHABLE_KEY
         sync: false
-      - key: ALLOWED_ORIGINS
+      - key: ALLOWED_ORIGINS   # your real site address(es), comma-separated, e.g. https://devscale.vercel.app
         sync: false
+      - key: RATE_LIMIT_PER_MINUTE
+        value: 20
+      # The keep-alive is automatic on Render: it pings /health every 10 minutes using RENDER_EXTERNAL_URL.
