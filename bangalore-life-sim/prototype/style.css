@@ -1,0 +1,28 @@
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#0b0e14;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#eef2f7}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+.hidden{display:none!important}
+#loading{position:fixed;inset:0;display:grid;place-items:center;background:#0b0e14;font-size:20px;letter-spacing:.1em;z-index:50}
+.overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(8,12,20,.62);backdrop-filter:blur(3px);z-index:20}
+.panel{width:min(560px,92vw);background:rgba(18,24,36,.94);border:1px solid #2b3a52;border-radius:14px;padding:26px 28px;box-shadow:0 20px 60px #000a}
+h1{margin:0;font-size:30px;letter-spacing:.12em;font-weight:800}h1 span{color:#ffc928}h2{margin:0 0 14px}.sub{margin:4px 0 16px;color:#9fb0c8}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{background:#1d2a40;color:#eef2f7;border:1px solid #34507a;border-radius:10px;padding:12px 14px;font-size:15px;font-weight:600;cursor:pointer;text-align:left}
+button small{display:block;font-weight:400;color:#8fa3bf;font-size:11.5px;margin-top:2px}button:hover:not(:disabled){background:#27406a}button:disabled{opacity:.4;cursor:not-allowed}button.ghost{background:transparent}
+.vehicles{display:flex;gap:10px;margin-bottom:14px}.veh{flex:1;padding:10px;border:2px solid #2b3a52;border-radius:10px;cursor:pointer;text-align:center;background:#141c2b}.veh.sel{border-color:#ffc928;background:#2a2412}.veh b{display:block}.veh small{color:#8fa3bf}
+#settings{margin-top:14px;display:grid;gap:8px}#settings label{display:flex;justify-content:space-between;align-items:center;font-size:14px}
+.note{font-size:11.5px;color:#d6a84a;margin:14px 0 0;line-height:1.4}
+#hud{position:fixed;inset:0;pointer-events:none;z-index:10;text-shadow:0 1px 3px #000}
+#topLeft{position:absolute;left:18px;top:14px}#clock{font-size:34px;font-weight:700}#wx,#modeLbl{color:#cdd8e6;font-size:13px}
+#mapWrap{position:absolute;right:18px;top:14px;width:220px}#mini{border-radius:50%;border:3px solid #ffffffcc;background:#222;box-shadow:0 4px 18px #000a;display:block}
+#gps{margin-top:8px;background:#0b1220cc;border-radius:10px;padding:6px 10px;display:flex;gap:10px;align-items:center;font-size:13px;min-height:38px}#gpsArrow{font-size:28px;color:#4cd1ff;width:30px;text-align:center}
+#speedo{position:absolute;right:20px;bottom:44px;text-align:right}#spd{font-size:64px;font-weight:800;line-height:1}.u{color:#bcc9da;margin-top:-4px}
+.bars{margin-top:8px;display:grid;gap:5px;width:190px;margin-left:auto}.bar{position:relative;height:14px;background:#0008;border-radius:7px;overflow:hidden}.bar i{display:block;height:100%;background:#4cd18a;width:50%}.bar.dmg i{background:#ff5a4a}.bar b{position:absolute;left:8px;top:0;font-size:9.5px;line-height:14px;letter-spacing:.1em}
+#mission{position:absolute;left:18px;bottom:44px;background:#0b1220d8;border-left:4px solid #ffc928;border-radius:8px;padding:10px 14px;min-width:260px;font-size:14px;line-height:1.5}#mission b{color:#ffc928}
+#money{position:absolute;left:18px;top:92px;font-size:20px;font-weight:700;color:#7dffa8}
+#signal{position:absolute;left:50%;top:70px;transform:translateX(-50%);font-size:14px;background:#000a;border-radius:8px;padding:4px 12px}
+#toasts{position:absolute;left:50%;top:120px;transform:translateX(-50%);display:grid;gap:6px;justify-items:center}.toast{background:#0b1220ee;border:1px solid #34507a;border-radius:8px;padding:8px 14px;font-size:15px;animation:fade 4.5s forwards}
+@keyframes fade{0%{opacity:0;transform:translateY(-6px)}8%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0}}
+#help{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#c1cde0}
+.mapbox{display:flex;gap:10px;background:#101722;border:1px solid #2b3a52;border-radius:12px;padding:12px;max-width:96vw}.mapside{width:230px;display:flex;flex-direction:column;gap:8px}
+#search{padding:8px;border-radius:8px;border:1px solid #34507a;background:#0b1220;color:#fff}#poiList{list-style:none;margin:0;padding:0;overflow:auto;max-height:480px}#poiList li{padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13px}#poiList li:hover{background:#27406a}.hint{font-size:11.5px;color:#8fa3bf}
+#bigmap{border-radius:8px;background:#222;height:min(700px,86vh);width:auto;max-width:calc(96vw - 290px);cursor:crosshair}

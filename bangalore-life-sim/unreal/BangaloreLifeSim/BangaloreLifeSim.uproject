@@ -1,0 +1,17 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.6",
+  "Category": "Games",
+  "Description": "Bangalore Life Simulator - UNVERIFIED skeleton (never opened in the editor from the authoring sandbox)",
+  "Modules": [ { "Name": "BangaloreLifeSim", "Type": "Runtime", "LoadingPhase": "Default" } ],
+  "Plugins": [
+    { "Name": "ChaosVehiclesPlugin", "Enabled": true },
+    { "Name": "PCG", "Enabled": true },
+    { "Name": "MassGameplay", "Enabled": true },
+    { "Name": "MassAI", "Enabled": true },
+    { "Name": "ZoneGraph", "Enabled": true },
+    { "Name": "PythonScriptPlugin", "Enabled": true },
+    { "Name": "EditorScriptingUtilities", "Enabled": true },
+    { "Name": "GeoReferencing", "Enabled": true }
+  ]
+}

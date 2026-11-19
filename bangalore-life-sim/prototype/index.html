@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bangalore Life Simulator — Phase 1 prototype</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="loading"><div>Loading Marathahalli…</div></div>
+
+<div id="menu" class="overlay hidden">
+  <div class="panel">
+    <h1>BANGALORE <span>LIFE SIMULATOR</span></h1>
+    <p class="sub">Phase 1 prototype · Marathahalli / Outer Ring Road</p>
+    <div class="vehicles" id="vehSel"></div>
+    <div class="btns">
+      <button id="btnNew">New Game <small>Auto-driver career, ₹0</small></button>
+      <button id="btnContinue">Continue <small id="saveInfo"></small></button>
+      <button id="btnAuto">Auto Driver Mode <small>pick up passengers</small></button>
+      <button id="btnFree">Free Roam</button>
+      <button disabled>Namma Metro Driver <small>Phase 3</small></button>
+      <button id="btnSettings" class="ghost">Settings</button>
+    </div>
+    <div id="settings" class="hidden">
+      <label>Shadows <input type="checkbox" id="setShadows" checked></label>
+      <label>Render scale <input type="range" id="setScale" min="0.5" max="1.5" step="0.25" value="1"></label>
+      <label>Traffic density <input type="range" id="setTraffic" min="0" max="140" step="10" value="80"></label>
+      <label>Pedestrians <input type="range" id="setPeds" min="0" max="120" step="10" value="50"></label>
+      <label>Volume <input type="range" id="setVol" min="0" max="1" step="0.1" value="0.5"></label>
+    </div>
+    <p class="note" id="approxNote"></p>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div id="topLeft"><div id="clock">08:30</div><div id="wx">Clear</div><div id="modeLbl"></div></div>
+  <div id="mapWrap"><canvas id="mini" width="220" height="220"></canvas><div id="gps"><span id="gpsArrow">↑</span><span id="gpsTxt"></span></div></div>
+  <div id="speedo"><div id="spd">0</div><div class="u">km/h</div>
+    <div class="bars"><div class="bar"><i id="fuelBar"></i><b>FUEL</b></div><div class="bar dmg"><i id="dmgBar"></i><b>DAMAGE</b></div></div></div>
+  <div id="mission" class="hidden"></div>
+  <div id="money">₹<span id="moneyV">0</span></div>
+  <div id="signal" class="hidden"></div>
+  <div id="toasts"></div>
+  <div id="help">W/S throttle·brake A/D steer · Space handbrake · H horn · E interact · F exit/enter · C camera · M map · R rain · T time · V vehicle · Esc pause</div>
+</div>
+
+<div id="fullmap" class="overlay hidden">
+  <div class="mapbox"><div class="mapside"><input id="search" placeholder="Search a place…"><ul id="poiList"></ul><button id="clearGps">Clear route</button><div class="hint">Click the map to set a GPS destination.</div></div><canvas id="bigmap" width="900" height="700"></canvas></div>
+</div>
+<div id="pause" class="overlay hidden"><div class="panel"><h2>Paused</h2><div class="btns"><button id="btnResume">Resume</button><button id="btnQuit">Main menu</button></div></div></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
