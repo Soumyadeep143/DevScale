@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Send, Loader2, X } from 'lucide-react';
 import { askAI, ApiError } from '../lib/api';
+import ChatText from './ui/ChatText';
+import { useJobs } from '../context/JobsContext';
 
 const QUICK_PROMPTS = [
   'How many jobs have I applied to today?',
@@ -10,6 +12,7 @@ const QUICK_PROMPTS = [
 ];
 
 export default function AIAssistant() {
+  const { jobs } = useJobs();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -27,7 +30,7 @@ export default function AIAssistant() {
     setMessages((m) => [...m, { role: 'user', text: question }]);
     setLoading(true);
     try {
-      const answer = await askAI(question, history);
+      const answer = await askAI(question, history, jobs);
       setMessages((m) => [...m, { role: 'ai', text: answer }]);
     } catch (err) {
       const isConfig = err instanceof ApiError && /GROQ_API_KEY|Groq/i.test(err.message);
@@ -97,7 +100,7 @@ export default function AIAssistant() {
               {messages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className="max-w-[85%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap"
+                    className={`max-w-[85%] rounded-xl px-3 py-2 text-sm break-words ${m.role === 'ai' ? '' : 'whitespace-pre-wrap'}`}
                     style={
                       m.role === 'user'
                         ? { background: 'var(--brand)', color: 'white' }
@@ -106,7 +109,7 @@ export default function AIAssistant() {
                         : { background: 'var(--surface-2)', color: 'var(--text-primary)' }
                     }
                   >
-                    {m.text}
+                    {m.role === 'ai' ? <ChatText text={m.text} /> : m.text}
                   </div>
                 </div>
               ))}

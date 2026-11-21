@@ -2,7 +2,7 @@ import { createApp } from './app.js';
 import { makeVerifier } from './auth.js';
 import { missingSettings, readConfig } from './config.js';
 import { makeFetchPage } from './fetchPage.js';
-import { makeCallModel } from './groq.js';
+import { makeCallChat, makeCallModel } from './groq.js';
 import { keepAliveSettings, startKeepAlive } from './keepAlive.js';
 
 const config = readConfig();
@@ -16,6 +16,7 @@ const app = createApp({
   config,
   verify: makeVerifier({ issuer: config.issuer, origins: config.origins }),
   callModel: makeCallModel({ key: config.groqKey, base: config.groqBase, model: config.model }),
+  callChat: makeCallChat({ key: config.groqKey, base: config.groqBase, model: config.model }),
   fetchPage: makeFetchPage(),
 });
 

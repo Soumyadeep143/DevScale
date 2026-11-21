@@ -274,14 +274,20 @@ async function invokeAI(action, payload) {
   return data;
 }
 
-export async function askAI(question, history = []) {
-  return (await invokeAI('askAI', { question, history })).answer;
+// Where the AI server lives: VITE_AI_SERVER_URL (your Render address in production). While developing
+// locally (`npm run dev`) with it unset, fall back to the server's default local address. Tests and
+// production builds never fall back, so they behave exactly as configured.
+const LOCAL_AI_SERVER = 'http://localhost:8787';
+export function aiServerUrl() {
+  const set = String(import.meta.env.VITE_AI_SERVER_URL || '').trim();
+  if (set) return set.replace(/\/$/, '');
+  return import.meta.env.DEV && import.meta.env.MODE !== 'test' ? LOCAL_AI_SERVER : '';
 }
 
 // The DevScale AI server (server/): holds the AI key, answers CORS only for this app, and checks the
 // person's Clerk sign-in. Set VITE_AI_SERVER_URL to use it.
-async function callAiServer(text, route = 'parse-jobs') {
-  const base = String(import.meta.env.VITE_AI_SERVER_URL).replace(/\/$/, '');
+async function callAiServer(text, route = 'parse-jobs', body = { text }) {
+  const base = aiServerUrl();
   const token = typeof window !== 'undefined' && window.Clerk?.session ? await window.Clerk.session.getToken() : null;
   if (!token) throw new ApiError('Please sign in again.');
   let res;
@@ -289,7 +295,7 @@ async function callAiServer(text, route = 'parse-jobs') {
     res = await fetch(`${base}/api/${route}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(body),
     });
   } catch {
     throw new ApiError(`Couldn’t reach the AI server at ${base}. Is it running? (In the server folder: npm start)`);
@@ -299,13 +305,23 @@ async function callAiServer(text, route = 'parse-jobs') {
   return data;
 }
 
+// The job-search assistant. With VITE_AI_SERVER_URL it goes through the AI server (the person's jobs are
+// sent along); otherwise through the deployed Supabase function, which reads their data itself.
+export async function askAI(question, history = [], jobs = []) {
+  if (aiServerUrl()) {
+    const compact = jobs.map((j) => ({ company: j.company, role: j.role, status: j.status, dateApplied: j.dateApplied, interviewStatus: j.interviewStatus, notes: j.notes }));
+    return (await callAiServer(null, 'ask', { question, history, jobs: compact })).answer;
+  }
+  return (await invokeAI('askAI', { question, history })).answer;
+}
+
 // Turns pasted free text (a job posting, an email, a link, a snippet, spreadsheet rows) into job records
 // in the 12-column schema, plus the same records as importable jobs. Nothing is saved: the caller shows
 // the result for review first. Route, in order: the AI server (VITE_AI_SERVER_URL), a key in .env.local
 // for local development, or the deployed Supabase function.
 export async function parseJobsWithAI(text) {
   let data;
-  if (import.meta.env.VITE_AI_SERVER_URL) {
+  if (aiServerUrl()) {
     data = await callAiServer(text);
   } else if (import.meta.env.DEV && import.meta.env.VITE_AI_API_KEY) {
     // `import.meta.env.DEV` is false in production builds, so this branch and the key vanish there.
@@ -325,7 +341,7 @@ export async function parseJobsWithAI(text) {
 // them for review. Same three routes as parseJobsWithAI.
 export async function parseContactsWithAI(text) {
   let data;
-  if (import.meta.env.VITE_AI_SERVER_URL) {
+  if (aiServerUrl()) {
     data = await callAiServer(text, 'parse-contacts');
   } else if (import.meta.env.DEV && import.meta.env.VITE_AI_API_KEY) {
     const { directParseContacts } = await import('./aiDirect.js');

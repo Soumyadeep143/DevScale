@@ -28,3 +28,32 @@ export function makeCallModel({ key, base, model, fetchImpl = fetch }) {
     return data?.choices?.[0]?.message?.content || '';
   };
 }
+
+// Plain chat (no JSON mode) for the assistant: a list of {role, content} messages in, the reply text out.
+export function makeCallChat({ key, base, model, fetchImpl = fetch }) {
+  return async function callChat(messages) {
+    let res;
+    try {
+      res = await fetchImpl(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model, temperature: 0.4, max_tokens: 1600, messages,
+          ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}),
+        }),
+        signal: AbortSignal.timeout(45_000),
+      });
+    } catch {
+      throw Object.assign(new Error('Could not reach the AI provider.'), { status: 502 });
+    }
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const status = res.status === 429 ? 429 : 502;
+      const message = res.status === 401 || res.status === 403 ? 'The server’s AI key was rejected. Check GROQ_API_KEY.'
+        : res.status === 429 ? 'The AI provider is rate-limiting. Wait a moment and try again.'
+        : data?.error?.message || `The AI provider returned an error (${res.status}).`;
+      throw Object.assign(new Error(message), { status });
+    }
+    return data?.choices?.[0]?.message?.content || 'No response from the AI provider.';
+  };
+}
