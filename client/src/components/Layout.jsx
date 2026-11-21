@@ -11,13 +11,13 @@ export default function Layout({ workspace = 'personal', setWorkspace, view, set
   const tabs = WORKSPACE_TABS[workspace] || WORKSPACE_TABS.personal;
 
   return (
-    <div style={{ background: 'var(--page)' }} className="min-h-screen has-bottom-nav md:pb-0">
+    <div style={{ background: 'var(--page)' }} className="min-h-screen has-bottom-nav md:pb-0 overflow-x-clip">
       <AppHeader
         workspace={workspace} setWorkspace={setWorkspace} tabs={tabs} view={view} setView={setView}
         session={session} loading={loading} error={error} lastSynced={lastSynced} onRefresh={refresh} onSignOut={signOut}
       />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-6">
+      <main className="min-w-0 max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-6">
         {error && (
           <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-lg px-4 py-2.5 text-sm"
             style={{ background: 'color-mix(in oklab, var(--red) 12%, var(--surface))', color: 'var(--red)' }}>

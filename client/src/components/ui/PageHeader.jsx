@@ -1,11 +1,11 @@
 export default function PageHeader({ title, subtitle, children }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
+      <div className="min-w-0 max-w-full">
         <h1 className="text-xl sm:text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>{title}</h1>
         {subtitle && <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{subtitle}</p>}
       </div>
-      {children && <div className="flex items-center gap-2 shrink-0">{children}</div>}
+      {children && <div className="flex flex-wrap items-center gap-2 max-w-full min-w-0">{children}</div>}
     </div>
   );
 }

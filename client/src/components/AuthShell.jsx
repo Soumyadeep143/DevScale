@@ -1,4 +1,4 @@
-import logoIcon from '../assets/logo-icon.jpg';
+import logoIcon from '../assets/logo-icon.png';
 
 // The centered card shared by every signed-out screen.
 export default function AuthShell({ title, subtitle, children }) {
@@ -6,7 +6,7 @@ export default function AuthShell({ title, subtitle, children }) {
     <div className="min-h-screen flex items-center justify-center p-4 sm:p-6" style={{ background: 'var(--page)' }}>
       <div className="w-full max-w-md rounded-2xl border p-6 sm:p-8" style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-lg)' }}>
         <div className="flex items-center gap-3 mb-1">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center overflow-hidden border p-1 shrink-0" style={{ background: '#ffffff', borderColor: 'var(--border)' }}>
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center overflow-hidden border p-1 shrink-0" style={{ background: '#0b1020', borderColor: 'var(--border)' }}>
             <img src={logoIcon} alt="DevScale" className="w-full h-full object-contain rounded-[4px]" />
           </div>
           <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h1>

@@ -47,11 +47,11 @@ export default function TeamDashboard({ onNavigate }) {
   const v = (n) => (loading ? '—' : n);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 min-w-0">
       <PageHeader title="Team Overview" subtitle="Collaborate, share opportunities, and grow together.">
         <button onClick={() => go('peers', 'connect')} className={primaryBtn} style={{ background: 'var(--brand)' }}><UserPlus size={15} /> Connect Peer</button>
-        <button onClick={() => go('leads', 'share')} className={`${ghostBtn} hidden sm:inline-flex`} style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}><Share2 size={15} /> Move Lead to Team</button>
-        <button onClick={() => go('contacts', 'share')} className={`${ghostBtn} hidden sm:inline-flex`} style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}><Plus size={15} /> Add Contact</button>
+        <button onClick={() => go('leads', 'share')} className={`${ghostBtn} hidden sm:inline-flex whitespace-nowrap`} style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}><Share2 size={15} /> Move Lead to Team</button>
+        <button onClick={() => go('contacts', 'share')} className={`${ghostBtn} hidden sm:inline-flex whitespace-nowrap`} style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}><Plus size={15} /> Add Contact</button>
       </PageHeader>
 
       <Notice err={error} />
@@ -64,7 +64,7 @@ export default function TeamDashboard({ onNavigate }) {
         <TeamStatCard label="Pending Requests" value={v(stats.pending.length)} sub={loading ? '' : `${stats.incoming} incoming`} icon={UserPlus} color="var(--red)" />
       </div>
 
-      <div className="grid lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-w-0">
         <Panel className="lg:col-span-3" title="Shared Leads (Last 12 Weeks)" subtitle="Leads in your team, by the week they were added">
           {loading ? <LoadingSkeleton rows={1} height={220} label="Loading chart" /> : chartTotal === 0 ? (
             <p className="text-sm text-center py-16" style={muted}>No shared leads in the last 12 weeks.</p>

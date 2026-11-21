@@ -20,7 +20,7 @@ export function TeamActivityCard({ event, onOpen, compact = false }) {
         </span>
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
+        <p className="text-sm break-words" style={{ color: 'var(--text-primary)' }}>
           <span className="font-semibold">{event.actor}</span> {event.text}
         </p>
         {event.detail && <p className="text-xs truncate" style={muted}>{event.detail}</p>}

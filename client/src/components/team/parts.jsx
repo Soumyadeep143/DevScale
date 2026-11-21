@@ -22,7 +22,7 @@ export function TeamStatCard({ label, value, sub, icon: Icon, color }) {
         <Icon size={18} style={{ color }} />
       </span>
       <p className="text-2xl font-semibold tabular-nums leading-none" style={{ color: 'var(--text-primary)' }}>{value}</p>
-      <p className="text-xs mt-1.5" style={{ color: 'var(--text-secondary)' }}>{label}</p>
+      <p className="text-xs mt-1.5 break-words" style={{ color: 'var(--text-secondary)' }}>{label}</p>
       {sub && <p className="text-[11px] mt-0.5 truncate" style={muted}>{sub}</p>}
     </div>
   );

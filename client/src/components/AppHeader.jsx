@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LogOut, Moon, RefreshCw, Sun, User, WifiOff } from 'lucide-react';
 import { openProfile } from '../lib/profileRoute';
 import { useTheme } from '../lib/useTheme';
-import logoIcon from '../assets/logo-icon.jpg';
+import logoIcon from '../assets/logo-icon.png';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
 import DesktopNavigation from './DesktopNavigation';
 
@@ -75,7 +75,7 @@ export default function AppHeader({ workspace, setWorkspace, tabs, view, setView
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex flex-wrap md:flex-nowrap items-center gap-x-4 gap-y-2.5 py-2.5 md:h-16 md:py-0">
           <div className="order-1 flex items-center gap-2.5 shrink-0">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden p-0.5" style={{ background: '#fff' }}>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden p-0.5" style={{ background: '#0b1020' }}>
               <img src={logoIcon} alt="" className="w-full h-full object-contain rounded-[3px]" />
             </div>
             <span className="font-semibold text-base">

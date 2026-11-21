@@ -78,6 +78,21 @@ html, body, #root {
   height: 100%;
 }
 
+/* Never let the page scroll sideways: anything wider than the viewport is clipped, and wide
+   content (tables, chip rows) scrolls inside its own container instead. */
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+#root {
+  max-width: 100%;
+  overflow-x: clip;
+}
+img, svg, video, canvas { max-width: 100%; }
+input, select, textarea, button { max-width: 100%; }
+
 body {
   margin: 0;
   background: var(--page);
